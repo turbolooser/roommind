@@ -76,6 +76,11 @@ AC_BOOST_DELTA_MAX = 50.0  # Comfort-end AC cap (°C); finite value above any re
 PROPORTIONAL_DEADBAND_C = 0.5  # Minimum proportional setpoint change (°C) to resend, in the gentle regime
 PROPORTIONAL_DEADBAND_NEAR_TARGET_C = 0.2  # Finer proportional deadband (°C) within 1°C of target
 
+# Staged idle: minutes a device stays in setback before being fully turned
+# off. 0 (default) disables the escalation → pure setback (byte-identical to
+# upstream). Only applies to devices whose idle_action resolves to "setback".
+DEFAULT_IDLE_OFF_AFTER_MINUTES = 0
+
 # Update interval in seconds
 UPDATE_INTERVAL = 30
 

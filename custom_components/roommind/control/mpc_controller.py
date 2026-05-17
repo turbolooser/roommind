@@ -63,6 +63,11 @@ _SENTINEL: object = object()  # default marker for backward-compat keyword detec
 # resets on integration reload (module reimport).
 _last_commands: dict[str, dict[str, Any]] = {}
 _setpoint_override_warned: set[str] = set()
+# Staged idle: monotonic timestamp when each entity first entered setback, and
+# the active idle_off_after_minutes (mirrored per cycle by async_apply). Same
+# cross-cycle module-state pattern as _last_commands above.
+_idle_setback_since: dict[str, float] = {}
+_idle_cfg: dict[str, float] = {"off_after_minutes": 0.0}
 
 
 def _cache_entry(service: str, data: dict) -> dict[str, Any]:
@@ -100,6 +105,8 @@ def clear_command_cache() -> None:
     """Clear the sent-command cache (for tests)."""
     _last_commands.clear()
     _setpoint_override_warned.clear()
+    _idle_setback_since.clear()
+    _idle_cfg["off_after_minutes"] = 0.0
 
 
 def _resolve_idle_setpoint(
@@ -436,6 +443,19 @@ async def async_idle_device(
             )
             await async_turn_off_climate(hass, entity_id, area_id=area_id, fallback_setpoint=fallback_temp)
             return
+
+        # Staged idle: after idle_off_after_minutes of continuous setback,
+        # escalate to a full turn-off. The timer is reset in _call() when the
+        # device is commanded back into an active hvac_mode. 0 = disabled.
+        idle_off_minutes = _idle_cfg["off_after_minutes"]
+        if idle_off_minutes > 0:
+            now = time.monotonic()
+            since = _idle_setback_since.get(entity_id)
+            if since is None:
+                _idle_setback_since[entity_id] = now
+            elif now - since >= idle_off_minutes * 60.0:
+                await async_turn_off_climate(hass, entity_id, area_id=area_id, fallback_setpoint=fallback_temp)
+                return
 
         # Compute setback temperature
         if current_hvac == "heat" and targets.heat is not None:
@@ -1225,6 +1245,7 @@ class MPCController:
         heating_boost_target: float | None = None,
         ac_heating_boost_target: float | None = None,
         cooling_boost_target: float | None = None,
+        idle_off_after_minutes: float = 0.0,
         heat_source_plan: HeatSourcePlan | None = None,
         compressor_forced_on: set[str] | None = None,
         compressor_forced_off: set[str] | None = None,
@@ -1253,6 +1274,11 @@ class MPCController:
         # after backward-compat conversion so legacy callers get a TargetTemps.
         self._idle_targets = targets
         self._force_off = force_off
+
+        # Mirror the staged-idle timeout into module state so async_idle_device
+        # (a module function called from many sites) can read it without
+        # threading it through every call.
+        _idle_cfg["off_after_minutes"] = idle_off_after_minutes
 
         # Resolve effective target_temp for the current mode
         if mode == MODE_HEATING:
@@ -1661,6 +1687,11 @@ class MPCController:
     async def _call(self, service: str, data: dict, *, temp_intent: str = "", deadband: float | None = None) -> None:
         eid = data.get("entity_id")
         state = self.hass.states.get(eid) if eid else None
+
+        # Staged idle: a device commanded back into an active mode restarts its
+        # setback→off timer (see async_idle_device).
+        if eid and service == "set_hvac_mode" and data.get("hvac_mode") in ("heat", "cool", "heat_cool"):
+            _idle_setback_since.pop(eid, None)
 
         # Delegate "turn off" to fallback-aware helper (handles heat-only TRVs)
         if service == "set_hvac_mode" and data.get("hvac_mode") == "off" and eid:
