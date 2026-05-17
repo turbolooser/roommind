@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from typing import Any
 
-from .const import DOMAIN
+import voluptuous as vol
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+
+from .const import (
+    DEFAULT_VACATION_ACTION,
+    DEFAULT_VACATION_FROST_TEMP,
+    DOMAIN,
+    VACATION_ACTIONS,
+)
 
 
 class RoomMindConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
@@ -21,3 +36,57 @@ class RoomMindConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             return self.async_create_entry(title="RoomMind", data={})
 
         return self.async_show_form(step_id="user")
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> RoomMindOptionsFlow:
+        """Return the options flow handler."""
+        return RoomMindOptionsFlow()
+
+
+class RoomMindOptionsFlow(OptionsFlow):
+    """Handle RoomMind options.
+
+    Settings are persisted to the RoomMind store (the single source of truth
+    shared with the panel WebSocket API), not to ``config_entry.options``.
+    """
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Manage RoomMind options (vacation behaviour)."""
+        store = self.hass.data.get(DOMAIN, {}).get("store")
+
+        if user_input is not None:
+            if store is not None:
+                await store.async_save_settings(
+                    {
+                        "vacation_action": user_input["vacation_action"],
+                        "vacation_frost_temp": user_input["vacation_frost_temp"],
+                    }
+                )
+            return self.async_create_entry(title="", data={})
+
+        settings = store.get_settings() if store is not None else {}
+        current_action = settings.get("vacation_action", DEFAULT_VACATION_ACTION)
+        current_frost = settings.get("vacation_frost_temp", DEFAULT_VACATION_FROST_TEMP)
+
+        schema = vol.Schema(
+            {
+                vol.Required("vacation_action", default=current_action): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=list(VACATION_ACTIONS),
+                        translation_key="vacation_action",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required("vacation_frost_temp", default=current_frost): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=3.0,
+                        max=15.0,
+                        step=0.5,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
