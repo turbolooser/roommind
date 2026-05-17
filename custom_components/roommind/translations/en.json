@@ -14,7 +14,7 @@
     "step": {
       "init": {
         "title": "RoomMind options",
-        "description": "Configure how RoomMind behaves while vacation mode is active.",
+        "description": "Configure vacation behaviour and the AC inverter setpoint strategy.",
         "data": {
           "vacation_action": "Vacation heating behaviour",
           "vacation_frost_temp": "Frost protection temperature (°C)",
@@ -34,7 +34,10 @@
           "pv_battery_soc_sensor": "Battery state-of-charge sensor (%, optional)",
           "pv_battery_soc_min": "Min battery SoC to boost (%)",
           "pv_boost_cool_percent": "Boost while cooling (%-points)",
-          "pv_boost_heat_percent": "Boost while heating (%-points)"
+          "pv_boost_heat_percent": "Boost while heating (%-points)",
+          "ac_setpoint_strategy": "AC setpoint strategy",
+          "ac_cool_offset_max": "Max cooling offset (K)",
+          "ac_heat_offset_max": "Max AC heating offset (K)"
         },
         "data_description": {
           "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
@@ -55,7 +58,10 @@
           "pv_battery_soc_sensor": "Optional. When set, boost only fires once the home battery is full enough — keeps charge priority on the battery first.",
           "pv_battery_soc_min": "Minimum battery state-of-charge for boost to engage. Ignored when no SoC sensor is set.",
           "pv_boost_cool_percent": "Demand %-points added on top of base + trim while the group is actively cooling.",
-          "pv_boost_heat_percent": "Demand %-points added on top of base + trim while the group is actively heating (useful in shoulder season)."
+          "pv_boost_heat_percent": "Demand %-points added on top of base + trim while the group is actively heating (useful in shoulder season).",
+          "ac_setpoint_strategy": "\"Boost\" ramps the AC setpoint toward the device limit (legacy). \"Offset\" shifts the comfort target by at most the offsets below, letting an inverter modulate gently. TRV/underfloor heating is unaffected.",
+          "ac_cool_offset_max": "At full demand, cool to this many K below the cool target.",
+          "ac_heat_offset_max": "At full demand, AC-heat to this many K above the heat target."
         }
       }
     }
@@ -65,6 +71,12 @@
       "options": {
         "setback": "Setback (heat to vacation temperature)",
         "off": "Off (frost protection only, cooling continues)"
+      }
+    },
+    "ac_setpoint_strategy": {
+      "options": {
+        "boost": "Boost (legacy ramp toward device limit)",
+        "offset": "Offset (gentle, inverter-friendly)"
       }
     }
   },

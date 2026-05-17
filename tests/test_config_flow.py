@@ -93,6 +93,9 @@ class TestOptionsFlow:
             "vacation_frost_temp": 8.0,
             "idle_off_after_minutes": 30,
             "idle_setback_offset": 2.0,
+            "ac_setpoint_strategy": "offset",
+            "ac_cool_offset_max": 2.5,
+            "ac_heat_offset_max": 1.5,
             "demand_control_enabled": True,
             "demand_select_entities": ["select.ac_demand"],
             "demand_min": 30,
@@ -112,29 +115,7 @@ class TestOptionsFlow:
         result = await flow.async_step_init(user_input)
 
         assert result["type"] == "create_entry"
-        store.async_save_settings.assert_awaited_once_with(
-            {
-                "vacation_action": "off",
-                "vacation_frost_temp": 8.0,
-                "idle_off_after_minutes": 30,
-                "idle_setback_offset": 2.0,
-                "demand_control_enabled": True,
-                "demand_select_entities": ["select.ac_demand"],
-                "demand_min": 30,
-                "demand_max": 95,
-                "demand_hysteresis": 10,
-                "demand_min_hold_minutes": 10,
-                "demand_down_hold_minutes": 5,
-                "pv_boost_enabled": True,
-                "pv_surplus_sensor": "sensor.pv_surplus",
-                "pv_surplus_min_w": 1500,
-                "pv_surplus_min_duration_minutes": 30,
-                "pv_battery_soc_sensor": "sensor.battery_soc",
-                "pv_battery_soc_min": 90,
-                "pv_boost_cool_percent": 15,
-                "pv_boost_heat_percent": 10,
-            }
-        )
+        store.async_save_settings.assert_awaited_once_with(user_input)
 
     @pytest.mark.asyncio
     async def test_submit_without_store_does_not_crash(self, hass):
@@ -149,6 +130,9 @@ class TestOptionsFlow:
                 "vacation_frost_temp": 7.0,
                 "idle_off_after_minutes": 0,
                 "idle_setback_offset": 3.0,
+                "ac_setpoint_strategy": "boost",
+                "ac_cool_offset_max": 2.0,
+                "ac_heat_offset_max": 2.0,
                 "demand_control_enabled": False,
                 "demand_select_entities": [],
                 "demand_min": 30,
