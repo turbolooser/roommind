@@ -82,6 +82,11 @@ DEFAULT_AC_SETPOINT_STRATEGY = AC_SETPOINT_STRATEGY_BOOST
 DEFAULT_AC_COOL_OFFSET_MAX = 2.0  # K below cool target at power_fraction=1.0
 DEFAULT_AC_HEAT_OFFSET_MAX = 2.0  # K above heat target at power_fraction=1.0
 
+# Staged idle: minutes a device stays in setback before being fully turned
+# off. 0 (default) disables the escalation → pure setback (byte-identical to
+# upstream). Only applies to devices whose idle_action resolves to "setback".
+DEFAULT_IDLE_OFF_AFTER_MINUTES = 0
+
 # Update interval in seconds
 UPDATE_INTERVAL = 30
 
