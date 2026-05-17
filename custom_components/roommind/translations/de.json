@@ -17,11 +17,13 @@
         "description": "Festlegen, wie sich RoomMind im aktiven Urlaubsmodus verhält.",
         "data": {
           "vacation_action": "Heizverhalten im Urlaub",
-          "vacation_frost_temp": "Frostschutztemperatur (°C)"
+          "vacation_frost_temp": "Frostschutztemperatur (°C)",
+          "idle_off_after_minutes": "Gerät nach Leerlauf ausschalten (Min., 0=nie)"
         },
         "data_description": {
           "vacation_action": "\"Absenkung\" heizt auf die Urlaubstemperatur. \"Aus\" deaktiviert aktives Heizen (nur Frostschutz); Kühlen folgt weiter Eco-Kühlen.",
-          "vacation_frost_temp": "Tiefste Temperatur, die gehalten wird, während im Urlaub nicht geheizt wird."
+          "vacation_frost_temp": "Tiefste Temperatur, die gehalten wird, während im Urlaub nicht geheizt wird.",
+          "idle_off_after_minutes": "Bleibt ein Raum komfortabel, erst so lange Absenkung halten, dann das Gerät ganz ausschalten. 0 deaktiviert (reine Absenkung). Erholt sich automatisch, sobald wieder geheizt/gekühlt werden muss."
         }
       }
     }

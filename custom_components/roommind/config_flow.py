@@ -15,6 +15,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    DEFAULT_IDLE_OFF_AFTER_MINUTES,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
     DOMAIN,
@@ -61,6 +62,7 @@ class RoomMindOptionsFlow(OptionsFlow):
                     {
                         "vacation_action": user_input["vacation_action"],
                         "vacation_frost_temp": user_input["vacation_frost_temp"],
+                        "idle_off_after_minutes": user_input["idle_off_after_minutes"],
                     }
                 )
             return self.async_create_entry(title="", data={})
@@ -68,6 +70,7 @@ class RoomMindOptionsFlow(OptionsFlow):
         settings = store.get_settings() if store is not None else {}
         current_action = settings.get("vacation_action", DEFAULT_VACATION_ACTION)
         current_frost = settings.get("vacation_frost_temp", DEFAULT_VACATION_FROST_TEMP)
+        current_idle_off = settings.get("idle_off_after_minutes", DEFAULT_IDLE_OFF_AFTER_MINUTES)
 
         schema = vol.Schema(
             {
@@ -84,6 +87,15 @@ class RoomMindOptionsFlow(OptionsFlow):
                         max=15.0,
                         step=0.5,
                         unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required("idle_off_after_minutes", default=current_idle_off): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=240,
+                        step=5,
+                        unit_of_measurement="min",
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
