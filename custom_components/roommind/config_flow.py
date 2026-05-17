@@ -19,6 +19,11 @@ from .const import (
     DEFAULT_AC_COOL_OFFSET_MAX,
     DEFAULT_AC_HEAT_OFFSET_MAX,
     DEFAULT_AC_SETPOINT_STRATEGY,
+    DEFAULT_DEMAND_CONTROL_ENABLED,
+    DEFAULT_DEMAND_HYSTERESIS,
+    DEFAULT_DEMAND_MAX,
+    DEFAULT_DEMAND_MIN,
+    DEFAULT_DEMAND_MIN_HOLD_MINUTES,
     DEFAULT_IDLE_OFF_AFTER_MINUTES,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
@@ -70,6 +75,12 @@ class RoomMindOptionsFlow(OptionsFlow):
                         "ac_cool_offset_max": user_input["ac_cool_offset_max"],
                         "ac_heat_offset_max": user_input["ac_heat_offset_max"],
                         "idle_off_after_minutes": user_input["idle_off_after_minutes"],
+                        "demand_control_enabled": user_input["demand_control_enabled"],
+                        "demand_select_entities": user_input["demand_select_entities"],
+                        "demand_min": user_input["demand_min"],
+                        "demand_max": user_input["demand_max"],
+                        "demand_hysteresis": user_input["demand_hysteresis"],
+                        "demand_min_hold_minutes": user_input["demand_min_hold_minutes"],
                     }
                 )
             return self.async_create_entry(title="", data={})
@@ -81,6 +92,12 @@ class RoomMindOptionsFlow(OptionsFlow):
         current_cool_offset = settings.get("ac_cool_offset_max", DEFAULT_AC_COOL_OFFSET_MAX)
         current_heat_offset = settings.get("ac_heat_offset_max", DEFAULT_AC_HEAT_OFFSET_MAX)
         current_idle_off = settings.get("idle_off_after_minutes", DEFAULT_IDLE_OFF_AFTER_MINUTES)
+        current_demand_enabled = settings.get("demand_control_enabled", DEFAULT_DEMAND_CONTROL_ENABLED)
+        current_demand_selects = settings.get("demand_select_entities", [])
+        current_demand_min = settings.get("demand_min", DEFAULT_DEMAND_MIN)
+        current_demand_max = settings.get("demand_max", DEFAULT_DEMAND_MAX)
+        current_demand_hyst = settings.get("demand_hysteresis", DEFAULT_DEMAND_HYSTERESIS)
+        current_demand_hold = settings.get("demand_min_hold_minutes", DEFAULT_DEMAND_MIN_HOLD_MINUTES)
 
         offset_selector = selector.NumberSelector(
             selector.NumberSelectorConfig(
@@ -126,6 +143,30 @@ class RoomMindOptionsFlow(OptionsFlow):
                         step=5,
                         unit_of_measurement="min",
                         mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required("demand_control_enabled", default=current_demand_enabled): selector.BooleanSelector(),
+                vol.Optional("demand_select_entities", default=current_demand_selects): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="select", multiple=True)
+                ),
+                vol.Required("demand_min", default=current_demand_min): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required("demand_max", default=current_demand_max): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required("demand_hysteresis", default=current_demand_hyst): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=50, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required("demand_min_hold_minutes", default=current_demand_hold): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=60, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX
                     )
                 ),
             }

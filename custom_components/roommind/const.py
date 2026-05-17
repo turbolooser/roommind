@@ -87,6 +87,21 @@ DEFAULT_AC_HEAT_OFFSET_MAX = 2.0  # K above heat target at power_fraction=1.0
 # upstream). Only applies to devices whose idle_action resolves to "setback".
 DEFAULT_IDLE_OFF_AFTER_MINUTES = 0
 
+# Compressor-group demand control: RoomMind drives the shared outdoor unit's
+# demand cap (%) from an outdoor-temp feedforward + the aggregate of member
+# power_fractions. Disabled by default → byte-identical to upstream (selects
+# untouched, any external demand automation keeps working).
+DEFAULT_DEMAND_CONTROL_ENABLED = False
+DEFAULT_DEMAND_MIN = 30
+DEFAULT_DEMAND_MAX = 95
+DEFAULT_DEMAND_HYSTERESIS = 10  # %-points: don't re-apply smaller changes
+DEFAULT_DEMAND_MIN_HOLD_MINUTES = 10  # min between demand changes (anti-thrash)
+DEMAND_GRID_STEP = 5  # device demand select granularity (%)
+# Outdoor-temp feedforward: heat pumps lose capacity when cold → need a higher
+# compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,
+# evaluated highest-first. Mirrors the field-tuned legacy curve.
+DEMAND_FEEDFORWARD_CURVE = ((12.0, 30), (8.0, 35), (4.0, 45), (0.0, 55), (-999.0, 70))
+
 # Update interval in seconds
 UPDATE_INTERVAL = 30
 
