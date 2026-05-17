@@ -88,10 +88,17 @@ class TestOptionsFlow:
         flow = RoomMindOptionsFlow()
         flow.hass = hass
 
-        result = await flow.async_step_init({"vacation_action": "off", "vacation_frost_temp": 8.0})
+        user_input = {
+            "vacation_action": "off",
+            "vacation_frost_temp": 8.0,
+            "ac_setpoint_strategy": "offset",
+            "ac_cool_offset_max": 2.5,
+            "ac_heat_offset_max": 1.5,
+        }
+        result = await flow.async_step_init(user_input)
 
         assert result["type"] == "create_entry"
-        store.async_save_settings.assert_awaited_once_with({"vacation_action": "off", "vacation_frost_temp": 8.0})
+        store.async_save_settings.assert_awaited_once_with(user_input)
 
     @pytest.mark.asyncio
     async def test_submit_without_store_does_not_crash(self, hass):
@@ -100,6 +107,14 @@ class TestOptionsFlow:
         flow = RoomMindOptionsFlow()
         flow.hass = hass
 
-        result = await flow.async_step_init({"vacation_action": "setback", "vacation_frost_temp": 7.0})
+        result = await flow.async_step_init(
+            {
+                "vacation_action": "setback",
+                "vacation_frost_temp": 7.0,
+                "ac_setpoint_strategy": "boost",
+                "ac_cool_offset_max": 2.0,
+                "ac_heat_offset_max": 2.0,
+            }
+        )
 
         assert result["type"] == "create_entry"

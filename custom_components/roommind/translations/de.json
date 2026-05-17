@@ -14,14 +14,20 @@
     "step": {
       "init": {
         "title": "RoomMind-Optionen",
-        "description": "Festlegen, wie sich RoomMind im aktiven Urlaubsmodus verhält.",
+        "description": "Urlaubsverhalten und AC-Inverter-Setpoint-Strategie konfigurieren.",
         "data": {
           "vacation_action": "Heizverhalten im Urlaub",
-          "vacation_frost_temp": "Frostschutztemperatur (°C)"
+          "vacation_frost_temp": "Frostschutztemperatur (°C)",
+          "ac_setpoint_strategy": "AC-Setpoint-Strategie",
+          "ac_cool_offset_max": "Max. Kühl-Offset (K)",
+          "ac_heat_offset_max": "Max. AC-Heiz-Offset (K)"
         },
         "data_description": {
           "vacation_action": "\"Absenkung\" heizt auf die Urlaubstemperatur. \"Aus\" deaktiviert aktives Heizen (nur Frostschutz); Kühlen folgt weiter Eco-Kühlen.",
-          "vacation_frost_temp": "Tiefste Temperatur, die gehalten wird, während im Urlaub nicht geheizt wird."
+          "vacation_frost_temp": "Tiefste Temperatur, die gehalten wird, während im Urlaub nicht geheizt wird.",
+          "ac_setpoint_strategy": "\"Boost\" rampt den AC-Sollwert zum Geräte-Limit (Legacy). \"Offset\" verschiebt das Komfortziel um höchstens die Offsets unten, sodass ein Inverter sanft moduliert. TRV/Fußbodenheizung bleibt unberührt.",
+          "ac_cool_offset_max": "Bei voller Anforderung um so viele K unter das Kühlziel kühlen.",
+          "ac_heat_offset_max": "Bei voller Anforderung um so viele K über das Heizziel AC-heizen."
         }
       }
     }
@@ -31,6 +37,12 @@
       "options": {
         "setback": "Absenkung (auf Urlaubstemperatur heizen)",
         "off": "Aus (nur Frostschutz, Kühlen läuft weiter)"
+      }
+    },
+    "ac_setpoint_strategy": {
+      "options": {
+        "boost": "Boost (Legacy-Rampe zum Geräte-Limit)",
+        "offset": "Offset (sanft, inverter-freundlich)"
       }
     }
   },

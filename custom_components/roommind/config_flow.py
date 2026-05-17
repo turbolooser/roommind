@@ -15,6 +15,10 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    AC_SETPOINT_STRATEGIES,
+    DEFAULT_AC_COOL_OFFSET_MAX,
+    DEFAULT_AC_HEAT_OFFSET_MAX,
+    DEFAULT_AC_SETPOINT_STRATEGY,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
     DOMAIN,
@@ -52,7 +56,7 @@ class RoomMindOptionsFlow(OptionsFlow):
     """
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Manage RoomMind options (vacation behaviour)."""
+        """Manage RoomMind options (vacation behaviour, AC setpoint strategy)."""
         store = self.hass.data.get(DOMAIN, {}).get("store")
 
         if user_input is not None:
@@ -61,6 +65,9 @@ class RoomMindOptionsFlow(OptionsFlow):
                     {
                         "vacation_action": user_input["vacation_action"],
                         "vacation_frost_temp": user_input["vacation_frost_temp"],
+                        "ac_setpoint_strategy": user_input["ac_setpoint_strategy"],
+                        "ac_cool_offset_max": user_input["ac_cool_offset_max"],
+                        "ac_heat_offset_max": user_input["ac_heat_offset_max"],
                     }
                 )
             return self.async_create_entry(title="", data={})
@@ -68,6 +75,19 @@ class RoomMindOptionsFlow(OptionsFlow):
         settings = store.get_settings() if store is not None else {}
         current_action = settings.get("vacation_action", DEFAULT_VACATION_ACTION)
         current_frost = settings.get("vacation_frost_temp", DEFAULT_VACATION_FROST_TEMP)
+        current_sp_strategy = settings.get("ac_setpoint_strategy", DEFAULT_AC_SETPOINT_STRATEGY)
+        current_cool_offset = settings.get("ac_cool_offset_max", DEFAULT_AC_COOL_OFFSET_MAX)
+        current_heat_offset = settings.get("ac_heat_offset_max", DEFAULT_AC_HEAT_OFFSET_MAX)
+
+        offset_selector = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.5,
+                max=6.0,
+                step=0.5,
+                unit_of_measurement="°C",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        )
 
         schema = vol.Schema(
             {
@@ -87,6 +107,15 @@ class RoomMindOptionsFlow(OptionsFlow):
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
+                vol.Required("ac_setpoint_strategy", default=current_sp_strategy): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=list(AC_SETPOINT_STRATEGIES),
+                        translation_key="ac_setpoint_strategy",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required("ac_cool_offset_max", default=current_cool_offset): offset_selector,
+                vol.Required("ac_heat_offset_max", default=current_heat_offset): offset_selector,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
