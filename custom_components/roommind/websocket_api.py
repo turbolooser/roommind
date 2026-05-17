@@ -122,6 +122,7 @@ _SETTINGS_SAVE_FIELDS = (
     "vacation_until",
     "vacation_action",
     "vacation_frost_temp",
+    "idle_off_after_minutes",
     "prediction_enabled",
     "presence_enabled",
     "presence_persons",
