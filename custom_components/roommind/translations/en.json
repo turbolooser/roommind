@@ -17,11 +17,13 @@
         "description": "Configure how RoomMind behaves while vacation mode is active.",
         "data": {
           "vacation_action": "Vacation heating behaviour",
-          "vacation_frost_temp": "Frost protection temperature (°C)"
+          "vacation_frost_temp": "Frost protection temperature (°C)",
+          "idle_off_after_minutes": "Turn device off after idle (min, 0=never)"
         },
         "data_description": {
           "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
-          "vacation_frost_temp": "Lowest temperature kept while heating is off during vacation."
+          "vacation_frost_temp": "Lowest temperature kept while heating is off during vacation.",
+          "idle_off_after_minutes": "When a room stays comfortable, hold setback this long, then fully turn the device off. 0 disables (pure setback). Auto-recovers when heating/cooling is needed again."
         }
       }
     }
