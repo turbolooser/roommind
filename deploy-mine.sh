@@ -34,8 +34,13 @@ SSH="sshpass -p ${HA_PASS} ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 
 
 echo "==> Sicherung des HA-Verzeichnisses (${REMOTE})"
 mkdir -p "${BACKUP_DIR}"
-${SSH} "tar czf - -C ${REMOTE} ." > "${BACKUP_DIR}/roommind-ha-${TS}.tar.gz"
-echo "    -> ${BACKUP_DIR}/roommind-ha-${TS}.tar.gz ($(du -h "${BACKUP_DIR}/roommind-ha-${TS}.tar.gz" | cut -f1))"
+BACKUP_FILE="${BACKUP_DIR}/roommind-ha-${TS}.tar.gz"
+${SSH} "tar czf - -C ${REMOTE} ." > "${BACKUP_FILE}"
+if ! gzip -t "${BACKUP_FILE}" 2>/dev/null; then
+  echo "FEHLER: Backup defekt (gzip-Test fehlgeschlagen) — Deploy abgebrochen"
+  exit 1
+fi
+echo "    -> ${BACKUP_FILE} ($(ls -lh "${BACKUP_FILE}" | awk '{print $5}'), $(tar tzf "${BACKUP_FILE}" | wc -l) Dateien, gzip OK)"
 
 echo "==> Deploy Python-Dateien (ohne frontend/, ohne __pycache__)"
 tar czf - -C "${SRC}" \
