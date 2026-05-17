@@ -126,6 +126,7 @@ _SETTINGS_SAVE_FIELDS = (
     "ac_cool_offset_max",
     "ac_heat_offset_max",
     "idle_off_after_minutes",
+    "idle_setback_offset",
     "demand_control_enabled",
     "demand_select_entities",
     "demand_min",

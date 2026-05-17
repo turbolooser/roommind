@@ -81,6 +81,7 @@ from .managers.valve_manager import ValveManager
 from .managers.weather_manager import WeatherManager
 from .managers.window_manager import WindowManager
 from .utils.device_utils import (
+    DEFAULT_IDLE_SETBACK_OFFSET,
     build_rooms_devices_map,
     get_ac_eids,
     get_all_entity_ids,
@@ -808,6 +809,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                     ac_cool_offset_max=settings.get("ac_cool_offset_max", DEFAULT_AC_COOL_OFFSET_MAX),
                     ac_heat_offset_max=settings.get("ac_heat_offset_max", DEFAULT_AC_HEAT_OFFSET_MAX),
                     idle_off_after_minutes=settings.get("idle_off_after_minutes", DEFAULT_IDLE_OFF_AFTER_MINUTES),
+                    idle_setback_offset=settings.get("idle_setback_offset", DEFAULT_IDLE_SETBACK_OFFSET),
                     heat_source_plan=heat_source_plan,
                     compressor_forced_on=compressor_forced_on or None,
                     compressor_forced_off=compressor_forced_off or None,
