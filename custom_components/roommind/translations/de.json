@@ -10,6 +10,30 @@
       "already_configured": "RoomMind ist bereits konfiguriert."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "RoomMind-Optionen",
+        "description": "Festlegen, wie sich RoomMind im aktiven Urlaubsmodus verhält.",
+        "data": {
+          "vacation_action": "Heizverhalten im Urlaub",
+          "vacation_frost_temp": "Frostschutztemperatur (°C)"
+        },
+        "data_description": {
+          "vacation_action": "\"Absenkung\" heizt auf die Urlaubstemperatur. \"Aus\" deaktiviert aktives Heizen (nur Frostschutz); Kühlen folgt weiter Eco-Kühlen.",
+          "vacation_frost_temp": "Tiefste Temperatur, die gehalten wird, während im Urlaub nicht geheizt wird."
+        }
+      }
+    }
+  },
+  "selector": {
+    "vacation_action": {
+      "options": {
+        "setback": "Absenkung (auf Urlaubstemperatur heizen)",
+        "off": "Aus (nur Frostschutz, Kühlen läuft weiter)"
+      }
+    }
+  },
   "issues": {
     "restart_required": {
       "title": "Neustart erforderlich",
