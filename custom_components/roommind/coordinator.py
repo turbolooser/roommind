@@ -21,6 +21,11 @@ from .const import (
     CLIMATE_MODE_HEAT_ONLY,
     DEFAULT_COMFORT_COOL,
     DEFAULT_COMFORT_HEAT,
+    DEFAULT_DEMAND_CONTROL_ENABLED,
+    DEFAULT_DEMAND_HYSTERESIS,
+    DEFAULT_DEMAND_MAX,
+    DEFAULT_DEMAND_MIN,
+    DEFAULT_DEMAND_MIN_HOLD_MINUTES,
     DEFAULT_ECO_COOL,
     DEFAULT_ECO_HEAT,
     DEFAULT_IDLE_OFF_AFTER_MINUTES,
@@ -64,6 +69,7 @@ from .managers.compressor_group_manager import (
     resolve_master_action,
 )
 from .managers.cover_orchestrator import CoverOrchestrator, CoverResult
+from .managers.demand_controller import compute_demand_percent
 from .managers.ekf_training_manager import EkfTrainingManager
 from .managers.heat_source_orchestrator import HeatSourcePlan, evaluate_heat_sources
 from .managers.mold_manager import MoldManager
@@ -145,6 +151,9 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         self._compressor_manager = CompressorGroupManager()
         # Heat source orchestration state (per room)
         self._heat_source_states: dict[str, str] = {}
+        # Group demand control: gid -> (applied_percent, monotonic_ts) for
+        # hysteresis / min-hold anti-thrash.
+        self._group_demand_state: dict[str, tuple[int, float]] = {}
         # Track which rooms already have entity platform entities registered
         self._entity_areas: set[str] = set()
         # Min-run enforcement: timestamp when current non-idle mode started
@@ -241,6 +250,9 @@ class RoomMindCoordinator(DataUpdateCoordinator):
 
         # Control master devices based on aggregate room demand
         await self._async_control_master_devices(room_states, rooms, settings)
+
+        # Compressor-group demand cap (opt-in; default disabled)
+        await self._async_apply_group_demand(room_states, rooms, settings)
 
         # Record to history store (throttled)
         learning_disabled = set(settings.get("learning_disabled_rooms", []))
@@ -1872,6 +1884,90 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 wake_eid,
                 exc_info=True,
             )
+
+    async def _async_apply_group_demand(
+        self,
+        room_states: dict[str, dict],
+        rooms_config: dict[str, dict],
+        settings: dict,
+    ) -> None:
+        """Drive each compressor group's demand cap (%) — opt-in.
+
+        Hybrid: outdoor-temp feedforward + aggregate of active member
+        power_fractions, clamped to [demand_min, demand_max], snapped to the
+        device grid, with hysteresis + min-hold to avoid select thrashing.
+        Disabled by default → selects untouched (byte-identical to upstream).
+        """
+        if not settings.get("demand_control_enabled", DEFAULT_DEMAND_CONTROL_ENABLED):
+            return
+        if not settings.get("climate_control_active", True):
+            return
+        select_entities = settings.get("demand_select_entities") or []
+        if not select_entities:
+            return
+
+        demand_min = int(settings.get("demand_min", DEFAULT_DEMAND_MIN))
+        demand_max = int(settings.get("demand_max", DEFAULT_DEMAND_MAX))
+        hysteresis = float(settings.get("demand_hysteresis", DEFAULT_DEMAND_HYSTERESIS))
+        min_hold_s = float(settings.get("demand_min_hold_minutes", DEFAULT_DEMAND_MIN_HOLD_MINUTES)) * 60.0
+
+        for gid, group in self._compressor_manager.get_groups().items():
+            member_set = set(group.members)
+            active_pfs: list[float] = []
+            for area_id, room in rooms_config.items():
+                if not room.get("climate_control_enabled", True):
+                    continue
+                device_eids = {d.get("entity_id", "") for d in room.get("devices", [])}
+                if not (device_eids & member_set):
+                    continue
+                rs = room_states.get(area_id)
+                if not rs:
+                    continue
+                if rs.get("commanded_mode", rs.get("mode", MODE_IDLE)) == MODE_IDLE:
+                    continue
+                active_pfs.append(max(0.0, min(1.0, rs.get("heating_power", 0) / 100.0)))
+
+            target = compute_demand_percent(
+                self.outdoor_temp_effective,
+                active_pfs,
+                demand_min,
+                demand_max,
+            )
+
+            prev = self._group_demand_state.get(gid)
+            now = time.monotonic()
+            if prev is not None:
+                prev_val, prev_ts = prev
+                if abs(target - prev_val) < hysteresis:
+                    continue  # within hysteresis band — hold
+                if now - prev_ts < min_hold_s:
+                    continue  # min-hold not elapsed — anti-thrash
+
+            applied = False
+            for eid in select_entities:
+                st = self.hass.states.get(eid)
+                if st is not None and st.state == str(target):
+                    applied = True
+                    continue
+                try:
+                    await self.hass.services.async_call(
+                        "select",
+                        "select_option",
+                        {"entity_id": eid, "option": str(target)},
+                        blocking=True,
+                        context=make_roommind_context(),
+                    )
+                    applied = True
+                except Exception:  # noqa: BLE001
+                    _LOGGER.warning(
+                        "Group '%s': failed to set demand %s%% on '%s'",
+                        group.name,
+                        target,
+                        eid,
+                        exc_info=True,
+                    )
+            if applied:
+                self._group_demand_state[gid] = (target, now)
 
     async def _async_control_master_devices(
         self,
