@@ -92,12 +92,28 @@ class TestOptionsFlow:
             "vacation_action": "off",
             "vacation_frost_temp": 8.0,
             "idle_off_after_minutes": 30,
+            "demand_control_enabled": True,
+            "demand_select_entities": ["select.ac_demand"],
+            "demand_min": 30,
+            "demand_max": 95,
+            "demand_hysteresis": 10,
+            "demand_min_hold_minutes": 10,
         }
         result = await flow.async_step_init(user_input)
 
         assert result["type"] == "create_entry"
         store.async_save_settings.assert_awaited_once_with(
-            {"vacation_action": "off", "vacation_frost_temp": 8.0, "idle_off_after_minutes": 30}
+            {
+                "vacation_action": "off",
+                "vacation_frost_temp": 8.0,
+                "idle_off_after_minutes": 30,
+                "demand_control_enabled": True,
+                "demand_select_entities": ["select.ac_demand"],
+                "demand_min": 30,
+                "demand_max": 95,
+                "demand_hysteresis": 10,
+                "demand_min_hold_minutes": 10,
+            }
         )
 
     @pytest.mark.asyncio
@@ -112,6 +128,12 @@ class TestOptionsFlow:
                 "vacation_action": "setback",
                 "vacation_frost_temp": 7.0,
                 "idle_off_after_minutes": 0,
+                "demand_control_enabled": False,
+                "demand_select_entities": [],
+                "demand_min": 30,
+                "demand_max": 95,
+                "demand_hysteresis": 10,
+                "demand_min_hold_minutes": 10,
             }
         )
 
