@@ -179,6 +179,16 @@ DEFAULT_CONFLICT_RESOLUTION = CONFLICT_RESOLUTION_HEATING_PRIORITY
 # Far-future sentinel: vacation active indefinitely (year 2999)
 VACATION_SENTINEL_UNTIL = 32503680000.0
 
+# Vacation behaviour: how heating responds while vacation mode is active.
+# "setback" keeps the legacy behaviour (heat to vacation_temp). "off" disables
+# active heating and only frost-protects down to DEFAULT_VACATION_FROST_TEMP,
+# while cooling continues to track eco_cool.
+VACATION_ACTION_SETBACK = "setback"
+VACATION_ACTION_OFF = "off"
+VACATION_ACTIONS = (VACATION_ACTION_SETBACK, VACATION_ACTION_OFF)
+DEFAULT_VACATION_ACTION = VACATION_ACTION_SETBACK
+DEFAULT_VACATION_FROST_TEMP = 7.0
+
 
 def is_override_active(room: dict) -> bool:
     """Return True when a manual override is currently active."""

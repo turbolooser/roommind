@@ -24,6 +24,8 @@ from .const import (
     DEFAULT_ECO_COOL,
     DEFAULT_ECO_HEAT,
     DEFAULT_OUTDOOR_HEATING_MAX,
+    DEFAULT_VACATION_ACTION,
+    DEFAULT_VACATION_FROST_TEMP,
     DOMAIN,
     HEATING_BOOST_TARGET,
     HISTORY_ROTATE_CYCLES,
@@ -38,6 +40,7 @@ from .const import (
     SCHEDULE_STATE_ON,
     THERMAL_SAVE_CYCLES,
     UPDATE_INTERVAL,
+    VACATION_ACTION_OFF,
     TargetTemps,
     build_override_live,
     is_override_active,
@@ -1420,14 +1423,22 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                     )
                 )
 
-        # 2. Vacation — heat setback, cooling stays at eco_cool
+        # 2. Vacation — behaviour depends on settings["vacation_action"]:
+        #    "setback" (default): heat to vacation_temp, cooling stays at eco_cool.
+        #    "off": disable active heating (frost protection only), cooling stays
+        #    at eco_cool. Returning a numeric frost floor (not None) keeps the
+        #    existing force-off / mold-prevention safety block untouched.
         vacation_until = settings.get("vacation_until")
         if vacation_until is not None:
             if time.time() < vacation_until:
+                eco_cool = room.get("eco_cool", DEFAULT_ECO_COOL)
+                vacation_action = settings.get("vacation_action", DEFAULT_VACATION_ACTION)
+                if vacation_action == VACATION_ACTION_OFF:
+                    frost = settings.get("vacation_frost_temp", DEFAULT_VACATION_FROST_TEMP)
+                    return TargetTemps(heat=float(frost), cool=eco_cool)
                 vacation_temp = settings.get("vacation_temp")
                 if vacation_temp is not None:
                     t = float(vacation_temp)
-                    eco_cool = room.get("eco_cool", DEFAULT_ECO_COOL)
                     return TargetTemps(heat=t, cool=max(t, eco_cool))
             else:
                 self.hass.async_create_task(
