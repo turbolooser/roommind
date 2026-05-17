@@ -110,6 +110,11 @@ HEAD_OFFSET_HYSTERESIS_K = 0.375  # The applied offset moves only once the learn
 # and toggled heat/idle every 30 s cycle at the target without it (#429).
 SLOW_SYSTEM_START_PENALTY = 1.0
 
+# Staged idle: minutes a device stays in setback before being fully turned
+# off. 0 (default) disables the escalation → pure setback (byte-identical to
+# upstream). Only applies to devices whose idle_action resolves to "setback".
+DEFAULT_IDLE_OFF_AFTER_MINUTES = 0
+
 # Update interval in seconds
 UPDATE_INTERVAL = 30
 
