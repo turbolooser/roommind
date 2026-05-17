@@ -142,6 +142,8 @@ _SETTINGS_SAVE_FIELDS = (
     "hidden_rooms",
     "vacation_temp",
     "vacation_until",
+    "vacation_action",
+    "vacation_frost_temp",
     "prediction_enabled",
     "presence_enabled",
     "presence_persons",

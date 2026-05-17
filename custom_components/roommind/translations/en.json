@@ -10,6 +10,30 @@
       "already_configured": "RoomMind is already configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "RoomMind options",
+        "description": "Configure how RoomMind behaves while vacation mode is active.",
+        "data": {
+          "vacation_action": "Vacation heating behaviour",
+          "vacation_frost_temp": "Frost protection temperature (°C)"
+        },
+        "data_description": {
+          "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
+          "vacation_frost_temp": "Lowest temperature kept while heating is off during vacation."
+        }
+      }
+    }
+  },
+  "selector": {
+    "vacation_action": {
+      "options": {
+        "setback": "Setback (heat to vacation temperature)",
+        "off": "Off (frost protection only, cooling continues)"
+      }
+    }
+  },
   "issues": {
     "restart_required": {
       "title": "Restart required",
