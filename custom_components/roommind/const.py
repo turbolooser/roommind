@@ -70,6 +70,18 @@ AC_HEATING_BOOST_TARGET = 30  # Fallback AC heating boost (used when entity max_
 AC_COOLING_BOOST_TARGET = 16  # Fallback AC cooling boost (used when entity min_temp unavailable)
 MIN_POWER_FRACTION = 0.15  # Minimum non-zero power fraction (prevents TRV dead zone)
 
+# AC inverter setpoint strategy (cooling + AC heating; TRV/UFH unaffected).
+# "boost" (default) keeps the legacy proportional ramp toward the device
+# boost limit (byte-identical to upstream). "offset" commands the comfort
+# target shifted by at most ac_{cool,heat}_offset_max, letting an inverter
+# modulate in its efficient part-load band instead of slamming the setpoint.
+AC_SETPOINT_STRATEGY_BOOST = "boost"
+AC_SETPOINT_STRATEGY_OFFSET = "offset"
+AC_SETPOINT_STRATEGIES = (AC_SETPOINT_STRATEGY_BOOST, AC_SETPOINT_STRATEGY_OFFSET)
+DEFAULT_AC_SETPOINT_STRATEGY = AC_SETPOINT_STRATEGY_BOOST
+DEFAULT_AC_COOL_OFFSET_MAX = 2.0  # K below cool target at power_fraction=1.0
+DEFAULT_AC_HEAT_OFFSET_MAX = 2.0  # K above heat target at power_fraction=1.0
+
 # Update interval in seconds
 UPDATE_INTERVAL = 30
 
