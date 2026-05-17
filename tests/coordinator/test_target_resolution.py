@@ -182,6 +182,96 @@ class TestVacationMode:
         assert room_state["heat_target"] == 15.0
         assert room_state["cool_target"] == 27.0  # eco_cool, not 15
 
+    @pytest.mark.asyncio
+    async def test_vacation_action_setback_explicit(self, hass, mock_config_entry):
+        """vacation_action='setback' keeps the legacy setback behaviour."""
+        room = {**SAMPLE_ROOM, "eco_cool": 27.0}
+        store = _make_store_mock({"living_room_abc12345": room})
+        store.get_settings.return_value = {
+            "vacation_temp": 15.0,
+            "vacation_until": time.time() + 86400,
+            "vacation_action": "setback",
+        }
+        hass.data = {"roommind": {"store": store}}
+
+        hass.states.get = MagicMock(side_effect=make_mock_states_get())
+        hass.services.async_call = AsyncMock()
+
+        coordinator = _create_coordinator(hass, mock_config_entry)
+        data = await coordinator._async_update_data()
+
+        room_state = data["rooms"]["living_room_abc12345"]
+        assert room_state["heat_target"] == 15.0
+        assert room_state["cool_target"] == 27.0
+
+    @pytest.mark.asyncio
+    async def test_vacation_action_off_disables_heating(self, hass, mock_config_entry):
+        """vacation_action='off' drops heating to the frost floor; cooling stays at eco_cool."""
+        room = {**SAMPLE_ROOM, "eco_cool": 27.0}
+        store = _make_store_mock({"living_room_abc12345": room})
+        store.get_settings.return_value = {
+            "vacation_until": time.time() + 86400,
+            "vacation_action": "off",
+        }
+        hass.data = {"roommind": {"store": store}}
+
+        hass.states.get = MagicMock(side_effect=make_mock_states_get())
+        hass.services.async_call = AsyncMock()
+
+        coordinator = _create_coordinator(hass, mock_config_entry)
+        data = await coordinator._async_update_data()
+
+        room_state = data["rooms"]["living_room_abc12345"]
+        assert room_state["heat_target"] == 7.0  # DEFAULT_VACATION_FROST_TEMP
+        assert room_state["cool_target"] == 27.0  # eco_cool — cooling continues
+
+    @pytest.mark.asyncio
+    async def test_vacation_action_off_custom_frost_temp(self, hass, mock_config_entry):
+        """vacation_frost_temp overrides the default frost floor."""
+        room = {**SAMPLE_ROOM, "eco_cool": 27.0}
+        store = _make_store_mock({"living_room_abc12345": room})
+        store.get_settings.return_value = {
+            "vacation_until": time.time() + 86400,
+            "vacation_action": "off",
+            "vacation_frost_temp": 9.5,
+        }
+        hass.data = {"roommind": {"store": store}}
+
+        hass.states.get = MagicMock(side_effect=make_mock_states_get())
+        hass.services.async_call = AsyncMock()
+
+        coordinator = _create_coordinator(hass, mock_config_entry)
+        data = await coordinator._async_update_data()
+
+        room_state = data["rooms"]["living_room_abc12345"]
+        assert room_state["heat_target"] == 9.5
+        assert room_state["cool_target"] == 27.0
+
+    @pytest.mark.asyncio
+    async def test_override_beats_vacation_off(self, hass, mock_config_entry):
+        """Manual override still takes priority over vacation_action='off'."""
+        room = {
+            **SAMPLE_ROOM,
+            "override_temp": 25.0,
+            "override_until": time.time() + 3600,
+            "override_type": "boost",
+        }
+        store = _make_store_mock({"living_room_abc12345": room})
+        store.get_settings.return_value = {
+            "vacation_until": time.time() + 86400,
+            "vacation_action": "off",
+        }
+        hass.data = {"roommind": {"store": store}}
+
+        hass.states.get = MagicMock(side_effect=make_mock_states_get())
+        hass.services.async_call = AsyncMock()
+
+        coordinator = _create_coordinator(hass, mock_config_entry)
+        data = await coordinator._async_update_data()
+
+        room_state = data["rooms"]["living_room_abc12345"]
+        assert room_state["target_temp"] == 25.0
+
 
 class TestSplitOverrideResolution:
     """Tests for split heat/cool override targets (#313)."""
