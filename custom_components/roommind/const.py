@@ -134,6 +134,18 @@ DEMAND_FEEDFORWARD_CURVE = ((12.0, 30), (8.0, 35), (4.0, 45), (0.0, 55), (-999.0
 DEMAND_COOL_FLOOR = 40
 DEMAND_COOL_SLOPE = 25
 
+# AC inverter setpoint strategy (cooling + AC heating; TRV/UFH unaffected).
+# "boost" (default) keeps the legacy proportional ramp toward the device
+# boost limit (byte-identical to upstream). "offset" commands the comfort
+# target shifted by at most ac_{cool,heat}_offset_max, letting an inverter
+# modulate in its efficient part-load band instead of slamming the setpoint.
+AC_SETPOINT_STRATEGY_BOOST = "boost"
+AC_SETPOINT_STRATEGY_OFFSET = "offset"
+AC_SETPOINT_STRATEGIES = (AC_SETPOINT_STRATEGY_BOOST, AC_SETPOINT_STRATEGY_OFFSET)
+DEFAULT_AC_SETPOINT_STRATEGY = AC_SETPOINT_STRATEGY_BOOST
+DEFAULT_AC_COOL_OFFSET_MAX = 2.0  # K below cool target at power_fraction=1.0
+DEFAULT_AC_HEAT_OFFSET_MAX = 2.0  # K above heat target at power_fraction=1.0
+
 # Update interval in seconds
 UPDATE_INTERVAL = 30
 
