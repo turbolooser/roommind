@@ -94,6 +94,7 @@ class TestOptionsFlow:
             "ac_setpoint_strategy": "offset",
             "ac_cool_offset_max": 2.5,
             "ac_heat_offset_max": 1.5,
+            "idle_off_after_minutes": 30,
         }
         result = await flow.async_step_init(user_input)
 
@@ -114,6 +115,7 @@ class TestOptionsFlow:
                 "ac_setpoint_strategy": "boost",
                 "ac_cool_offset_max": 2.0,
                 "ac_heat_offset_max": 2.0,
+                "idle_off_after_minutes": 0,
             }
         )
 

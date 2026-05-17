@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_AC_COOL_OFFSET_MAX,
     DEFAULT_AC_HEAT_OFFSET_MAX,
     DEFAULT_AC_SETPOINT_STRATEGY,
+    DEFAULT_IDLE_OFF_AFTER_MINUTES,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
     DOMAIN,
@@ -68,6 +69,7 @@ class RoomMindOptionsFlow(OptionsFlow):
                         "ac_setpoint_strategy": user_input["ac_setpoint_strategy"],
                         "ac_cool_offset_max": user_input["ac_cool_offset_max"],
                         "ac_heat_offset_max": user_input["ac_heat_offset_max"],
+                        "idle_off_after_minutes": user_input["idle_off_after_minutes"],
                     }
                 )
             return self.async_create_entry(title="", data={})
@@ -78,6 +80,7 @@ class RoomMindOptionsFlow(OptionsFlow):
         current_sp_strategy = settings.get("ac_setpoint_strategy", DEFAULT_AC_SETPOINT_STRATEGY)
         current_cool_offset = settings.get("ac_cool_offset_max", DEFAULT_AC_COOL_OFFSET_MAX)
         current_heat_offset = settings.get("ac_heat_offset_max", DEFAULT_AC_HEAT_OFFSET_MAX)
+        current_idle_off = settings.get("idle_off_after_minutes", DEFAULT_IDLE_OFF_AFTER_MINUTES)
 
         offset_selector = selector.NumberSelector(
             selector.NumberSelectorConfig(
@@ -116,6 +119,15 @@ class RoomMindOptionsFlow(OptionsFlow):
                 ),
                 vol.Required("ac_cool_offset_max", default=current_cool_offset): offset_selector,
                 vol.Required("ac_heat_offset_max", default=current_heat_offset): offset_selector,
+                vol.Required("idle_off_after_minutes", default=current_idle_off): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=240,
+                        step=5,
+                        unit_of_measurement="min",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
