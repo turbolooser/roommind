@@ -17,6 +17,7 @@ from ..const import (
     AC_BOOST_DELTA_MIN,
     AC_COOLING_BOOST_TARGET,
     AC_HEATING_BOOST_TARGET,
+    AC_SETPOINT_STRATEGY_OFFSET,
     APPROACH_RATE_MIN,
     BANGBANG_COOL_HYSTERESIS,
     BANGBANG_HEAT_HYSTERESIS,
@@ -26,6 +27,9 @@ from ..const import (
     COMMAND_CACHE_REASSERT_SECONDS,
     COMPRESSOR_HOLD_RETARGET_TOLERANCE,
     CONTROL_MODE_BANGBANG,
+    DEFAULT_AC_COOL_OFFSET_MAX,
+    DEFAULT_AC_HEAT_OFFSET_MAX,
+    DEFAULT_AC_SETPOINT_STRATEGY,
     DEFAULT_COMFORT_WEIGHT,
     DEFAULT_CONTROL_MODE,
     DEFAULT_OUTDOOR_COOLING_MIN,
@@ -1978,6 +1982,9 @@ class MPCController:
         heating_boost_target: float | None = None,
         ac_heating_boost_target: float | None = None,
         cooling_boost_target: float | None = None,
+        ac_setpoint_strategy: str | None = None,
+        ac_cool_offset_max: float | None = None,
+        ac_heat_offset_max: float | None = None,
         idle_off_after_minutes: float = 0.0,
         idle_setback_offset: float | None = None,
         heat_source_plan: HeatSourcePlan | None = None,
@@ -2042,6 +2049,11 @@ class MPCController:
         trv_heat_boost = heating_boost_target if heating_boost_target is not None else HEATING_BOOST_TARGET
         ac_heat_boost = ac_heating_boost_target if ac_heating_boost_target is not None else AC_HEATING_BOOST_TARGET
         ac_cool_boost = cooling_boost_target if cooling_boost_target is not None else AC_COOLING_BOOST_TARGET
+
+        # AC inverter setpoint strategy (cooling + AC heating; TRV/UFH unaffected).
+        sp_strategy = ac_setpoint_strategy if ac_setpoint_strategy is not None else DEFAULT_AC_SETPOINT_STRATEGY
+        cool_offset = ac_cool_offset_max if ac_cool_offset_max is not None else DEFAULT_AC_COOL_OFFSET_MAX
+        heat_offset = ac_heat_offset_max if ac_heat_offset_max is not None else DEFAULT_AC_HEAT_OFFSET_MAX
 
         can_heat, can_cool = self._get_can_heat_cool()
 
@@ -2330,12 +2342,19 @@ class MPCController:
                 )
             # ACs: proportional setpoint in Full Control, actual target otherwise
             if self.has_external_sensor and current_temp is not None:
-                ac_heat_target = round(
-                    current_temp + power_fraction * (ac_heat_boost - current_temp),
-                    1,
-                )
-                ac_heat_target = max(effective_target, ac_heat_target)
-                ac_heat_target = min(ac_heat_boost, effective_target + self._ac_boost_delta, ac_heat_target)
+                if sp_strategy == AC_SETPOINT_STRATEGY_OFFSET:
+                    # Offset: command target + power·offset, letting the inverter
+                    # modulate in its part-load band instead of slamming the setpoint.
+                    ac_heat_target = round(effective_target + power_fraction * heat_offset, 1)
+                    ac_heat_target = max(effective_target, ac_heat_target)
+                    ac_heat_target = min(ac_heat_boost, ac_heat_target)
+                else:  # "boost" — legacy proportional ramp + approach-rate cap
+                    ac_heat_target = round(
+                        current_temp + power_fraction * (ac_heat_boost - current_temp),
+                        1,
+                    )
+                    ac_heat_target = max(effective_target, ac_heat_target)
+                    ac_heat_target = min(ac_heat_boost, effective_target + self._ac_boost_delta, ac_heat_target)
             else:
                 ac_heat_target = effective_target
             for eid in acs:
@@ -2380,11 +2399,17 @@ class MPCController:
                     await self._call("set_hvac_mode", {"entity_id": eid, "hvac_mode": "off"})
         elif mode == MODE_COOLING:
             if self.has_external_sensor and current_temp is not None:
-                ac_cool_target = round(
-                    current_temp - power_fraction * (current_temp - ac_cool_boost),
-                    1,
-                )
-                ac_cool_target = max(ac_cool_boost, effective_target - self._ac_boost_delta, ac_cool_target)
+                if sp_strategy == AC_SETPOINT_STRATEGY_OFFSET:
+                    # Offset: command target − power·offset, letting the inverter
+                    # modulate in its part-load band instead of slamming the setpoint.
+                    ac_cool_target = round(effective_target - power_fraction * cool_offset, 1)
+                    ac_cool_target = max(ac_cool_boost, ac_cool_target)
+                else:  # "boost" — legacy proportional ramp + approach-rate cap
+                    ac_cool_target = round(
+                        current_temp - power_fraction * (current_temp - ac_cool_boost),
+                        1,
+                    )
+                    ac_cool_target = max(ac_cool_boost, effective_target - self._ac_boost_delta, ac_cool_target)
                 ac_cool_target = min(effective_target, ac_cool_target)
             else:
                 ac_cool_target = effective_target
