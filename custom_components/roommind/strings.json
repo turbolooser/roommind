@@ -20,14 +20,16 @@
           "vacation_frost_temp": "Frost protection temperature (°C)",
           "ac_setpoint_strategy": "AC setpoint strategy",
           "ac_cool_offset_max": "Max cooling offset (K)",
-          "ac_heat_offset_max": "Max AC heating offset (K)"
+          "ac_heat_offset_max": "Max AC heating offset (K)",
+          "idle_off_after_minutes": "Turn device off after idle (min, 0=never)"
         },
         "data_description": {
           "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
           "vacation_frost_temp": "Lowest temperature kept while heating is off during vacation.",
           "ac_setpoint_strategy": "\"Boost\" ramps the AC setpoint toward the device limit (legacy). \"Offset\" shifts the comfort target by at most the offsets below, letting an inverter modulate gently. TRV/underfloor heating is unaffected.",
           "ac_cool_offset_max": "At full demand, cool to this many K below the cool target.",
-          "ac_heat_offset_max": "At full demand, AC-heat to this many K above the heat target."
+          "ac_heat_offset_max": "At full demand, AC-heat to this many K above the heat target.",
+          "idle_off_after_minutes": "When a room stays comfortable, hold setback this long, then fully turn the device off. 0 disables (pure setback). Auto-recovers when heating/cooling is needed again."
         }
       }
     }
