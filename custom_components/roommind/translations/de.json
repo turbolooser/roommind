@@ -14,7 +14,7 @@
     "step": {
       "init": {
         "title": "RoomMind-Optionen",
-        "description": "Festlegen, wie sich RoomMind im aktiven Urlaubsmodus verhält.",
+        "description": "Urlaubsverhalten und AC-Inverter-Setpoint-Strategie konfigurieren.",
         "data": {
           "vacation_action": "Heizverhalten im Urlaub",
           "vacation_frost_temp": "Frostschutztemperatur (°C)",
@@ -34,7 +34,10 @@
           "pv_battery_soc_sensor": "Batterie-Ladestand-Sensor (%, optional)",
           "pv_battery_soc_min": "Min. Batterie-SoC für Boost (%)",
           "pv_boost_cool_percent": "Boost im Kühlbetrieb (%-Punkte)",
-          "pv_boost_heat_percent": "Boost im Heizbetrieb (%-Punkte)"
+          "pv_boost_heat_percent": "Boost im Heizbetrieb (%-Punkte)",
+          "ac_setpoint_strategy": "AC-Setpoint-Strategie",
+          "ac_cool_offset_max": "Max. Kühl-Offset (K)",
+          "ac_heat_offset_max": "Max. AC-Heiz-Offset (K)"
         },
         "data_description": {
           "vacation_action": "\"Absenkung\" heizt auf die Urlaubstemperatur. \"Aus\" deaktiviert aktives Heizen (nur Frostschutz); Kühlen folgt weiter Eco-Kühlen.",
@@ -55,7 +58,10 @@
           "pv_battery_soc_sensor": "Optional. Wenn gesetzt, greift der Boost erst, wenn die Hausbatterie voll genug ist — der Speicher hat Vorrang.",
           "pv_battery_soc_min": "Mindest-Ladestand der Hausbatterie, damit der Boost greift. Ignoriert, wenn kein SoC-Sensor gesetzt ist.",
           "pv_boost_cool_percent": "Demand-%-Punkte, die zusätzlich zum Base + Trim drauf kommen, während die Gruppe aktiv kühlt.",
-          "pv_boost_heat_percent": "Demand-%-Punkte, die zusätzlich zum Base + Trim drauf kommen, während die Gruppe aktiv heizt (sinnvoll in der Übergangszeit)."
+          "pv_boost_heat_percent": "Demand-%-Punkte, die zusätzlich zum Base + Trim drauf kommen, während die Gruppe aktiv heizt (sinnvoll in der Übergangszeit).",
+          "ac_setpoint_strategy": "\"Boost\" rampt den AC-Sollwert zum Geräte-Limit (Legacy). \"Offset\" verschiebt das Komfortziel um höchstens die Offsets unten, sodass ein Inverter sanft moduliert. TRV/Fußbodenheizung bleibt unberührt.",
+          "ac_cool_offset_max": "Bei voller Anforderung um so viele K unter das Kühlziel kühlen.",
+          "ac_heat_offset_max": "Bei voller Anforderung um so viele K über das Heizziel AC-heizen."
         }
       }
     }
@@ -65,6 +71,12 @@
       "options": {
         "setback": "Absenkung (auf Urlaubstemperatur heizen)",
         "off": "Aus (nur Frostschutz, Kühlen läuft weiter)"
+      }
+    },
+    "ac_setpoint_strategy": {
+      "options": {
+        "boost": "Boost (Legacy-Rampe zum Geräte-Limit)",
+        "offset": "Offset (sanft, inverter-freundlich)"
       }
     }
   },
