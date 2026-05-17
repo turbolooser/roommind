@@ -110,3 +110,24 @@ async def test_clear_command_cache_resets_state():
     mc.clear_command_cache()
     assert mc._idle_setback_since == {}
     assert mc._idle_cfg["off_after_minutes"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_setback_offset_default_is_two(monkeypatch):
+    """Default setback offset (2 °C) → target - 2 while idle."""
+    _fake_clock(monkeypatch)
+    hass = build_hass()
+    hass.states.get = MagicMock(return_value=_heat_state())
+    await async_idle_device(hass, ENTITY, DEVICES, area_id="t", targets=TargetTemps(heat=21.0, cool=None))
+    assert _setpoint_calls(hass)[0][0][2]["temperature"] == 19.0
+
+
+@pytest.mark.asyncio
+async def test_setback_offset_configurable(monkeypatch):
+    """A configured setback offset overrides the 2 °C default."""
+    _fake_clock(monkeypatch)
+    hass = build_hass()
+    hass.states.get = MagicMock(return_value=_heat_state())
+    mc._idle_cfg["setback_offset"] = 3.0
+    await async_idle_device(hass, ENTITY, DEVICES, area_id="t", targets=TargetTemps(heat=21.0, cool=None))
+    assert _setpoint_calls(hass)[0][0][2]["temperature"] == 18.0  # 21 - 3
