@@ -14,14 +14,20 @@
     "step": {
       "init": {
         "title": "RoomMind options",
-        "description": "Configure how RoomMind behaves while vacation mode is active.",
+        "description": "Configure vacation behaviour and the AC inverter setpoint strategy.",
         "data": {
           "vacation_action": "Vacation heating behaviour",
-          "vacation_frost_temp": "Frost protection temperature (°C)"
+          "vacation_frost_temp": "Frost protection temperature (°C)",
+          "ac_setpoint_strategy": "AC setpoint strategy",
+          "ac_cool_offset_max": "Max cooling offset (K)",
+          "ac_heat_offset_max": "Max AC heating offset (K)"
         },
         "data_description": {
           "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
-          "vacation_frost_temp": "Lowest temperature kept while heating is off during vacation."
+          "vacation_frost_temp": "Lowest temperature kept while heating is off during vacation.",
+          "ac_setpoint_strategy": "\"Boost\" ramps the AC setpoint toward the device limit (legacy). \"Offset\" shifts the comfort target by at most the offsets below, letting an inverter modulate gently. TRV/underfloor heating is unaffected.",
+          "ac_cool_offset_max": "At full demand, cool to this many K below the cool target.",
+          "ac_heat_offset_max": "At full demand, AC-heat to this many K above the heat target."
         }
       }
     }
@@ -31,6 +37,12 @@
       "options": {
         "setback": "Setback (heat to vacation temperature)",
         "off": "Off (frost protection only, cooling continues)"
+      }
+    },
+    "ac_setpoint_strategy": {
+      "options": {
+        "boost": "Boost (legacy ramp toward device limit)",
+        "offset": "Offset (gentle, inverter-friendly)"
       }
     }
   },
