@@ -95,6 +95,12 @@ class TestOptionsFlow:
             "ac_cool_offset_max": 2.5,
             "ac_heat_offset_max": 1.5,
             "idle_off_after_minutes": 30,
+            "demand_control_enabled": True,
+            "demand_select_entities": ["select.ac_demand"],
+            "demand_min": 30,
+            "demand_max": 95,
+            "demand_hysteresis": 10,
+            "demand_min_hold_minutes": 10,
         }
         result = await flow.async_step_init(user_input)
 
@@ -116,6 +122,12 @@ class TestOptionsFlow:
                 "ac_cool_offset_max": 2.0,
                 "ac_heat_offset_max": 2.0,
                 "idle_off_after_minutes": 0,
+                "demand_control_enabled": False,
+                "demand_select_entities": [],
+                "demand_min": 30,
+                "demand_max": 95,
+                "demand_hysteresis": 10,
+                "demand_min_hold_minutes": 10,
             }
         )
 

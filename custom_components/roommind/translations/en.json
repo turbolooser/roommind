@@ -21,7 +21,13 @@
           "ac_setpoint_strategy": "AC setpoint strategy",
           "ac_cool_offset_max": "Max cooling offset (K)",
           "ac_heat_offset_max": "Max AC heating offset (K)",
-          "idle_off_after_minutes": "Turn device off after idle (min, 0=never)"
+          "idle_off_after_minutes": "Turn device off after idle (min, 0=never)",
+          "demand_control_enabled": "Compressor-group demand control",
+          "demand_select_entities": "Demand-control select entities",
+          "demand_min": "Min demand (%)",
+          "demand_max": "Max demand (%)",
+          "demand_hysteresis": "Demand hysteresis (%)",
+          "demand_min_hold_minutes": "Min hold between demand changes (min)"
         },
         "data_description": {
           "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
@@ -29,7 +35,13 @@
           "ac_setpoint_strategy": "\"Boost\" ramps the AC setpoint toward the device limit (legacy). \"Offset\" shifts the comfort target by at most the offsets below, letting an inverter modulate gently. TRV/underfloor heating is unaffected.",
           "ac_cool_offset_max": "At full demand, cool to this many K below the cool target.",
           "ac_heat_offset_max": "At full demand, AC-heat to this many K above the heat target.",
-          "idle_off_after_minutes": "When a room stays comfortable, hold setback this long, then fully turn the device off. 0 disables (pure setback). Auto-recovers when heating/cooling is needed again."
+          "idle_off_after_minutes": "When a room stays comfortable, hold setback this long, then fully turn the device off. 0 disables (pure setback). Auto-recovers when heating/cooling is needed again.",
+          "demand_control_enabled": "RoomMind drives the shared outdoor unit's demand cap from outdoor temp + aggregate room demand. Replaces any external demand automation. Off = selects untouched (default).",
+          "demand_select_entities": "The demand-control select entities of the compressor group (one per indoor unit).",
+          "demand_min": "Lowest demand cap RoomMind will set (also used when the group is idle).",
+          "demand_max": "Highest demand cap RoomMind will set.",
+          "demand_hysteresis": "Don't re-apply demand changes smaller than this (anti-flutter).",
+          "demand_min_hold_minutes": "Minimum time between demand changes (anti short-cycle of the cap)."
         }
       }
     }

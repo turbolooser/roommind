@@ -21,7 +21,13 @@
           "ac_setpoint_strategy": "AC-Setpoint-Strategie",
           "ac_cool_offset_max": "Max. Kühl-Offset (K)",
           "ac_heat_offset_max": "Max. AC-Heiz-Offset (K)",
-          "idle_off_after_minutes": "Gerät nach Leerlauf ausschalten (Min., 0=nie)"
+          "idle_off_after_minutes": "Gerät nach Leerlauf ausschalten (Min., 0=nie)",
+          "demand_control_enabled": "Demand-Regelung der Compressor-Gruppe",
+          "demand_select_entities": "Demand-Control Select-Entities",
+          "demand_min": "Min. Demand (%)",
+          "demand_max": "Max. Demand (%)",
+          "demand_hysteresis": "Demand-Hysterese (%)",
+          "demand_min_hold_minutes": "Mindest-Haltezeit zwischen Demand-Änderungen (Min.)"
         },
         "data_description": {
           "vacation_action": "\"Absenkung\" heizt auf die Urlaubstemperatur. \"Aus\" deaktiviert aktives Heizen (nur Frostschutz); Kühlen folgt weiter Eco-Kühlen.",
@@ -29,7 +35,13 @@
           "ac_setpoint_strategy": "\"Boost\" rampt den AC-Sollwert zum Geräte-Limit (Legacy). \"Offset\" verschiebt das Komfortziel um höchstens die Offsets unten, sodass ein Inverter sanft moduliert. TRV/Fußbodenheizung bleibt unberührt.",
           "ac_cool_offset_max": "Bei voller Anforderung um so viele K unter das Kühlziel kühlen.",
           "ac_heat_offset_max": "Bei voller Anforderung um so viele K über das Heizziel AC-heizen.",
-          "idle_off_after_minutes": "Bleibt ein Raum komfortabel, erst so lange Absenkung halten, dann das Gerät ganz ausschalten. 0 deaktiviert (reine Absenkung). Erholt sich automatisch, sobald wieder geheizt/gekühlt werden muss."
+          "idle_off_after_minutes": "Bleibt ein Raum komfortabel, erst so lange Absenkung halten, dann das Gerät ganz ausschalten. 0 deaktiviert (reine Absenkung). Erholt sich automatisch, sobald wieder geheizt/gekühlt werden muss.",
+          "demand_control_enabled": "RoomMind regelt den Demand-Cap des gemeinsamen Außengeräts aus Außentemp + aggregiertem Raumbedarf. Ersetzt externe Demand-Automationen. Aus = Selects unangetastet (Default).",
+          "demand_select_entities": "Die Demand-Control Select-Entities der Compressor-Gruppe (eine je Innengerät).",
+          "demand_min": "Niedrigster Demand-Cap, den RoomMind setzt (auch wenn die Gruppe idle ist).",
+          "demand_max": "Höchster Demand-Cap, den RoomMind setzt.",
+          "demand_hysteresis": "Demand-Änderungen kleiner als dies nicht erneut anwenden (Anti-Flattern).",
+          "demand_min_hold_minutes": "Mindestzeit zwischen Demand-Änderungen (Anti-Takten des Caps)."
         }
       }
     }
