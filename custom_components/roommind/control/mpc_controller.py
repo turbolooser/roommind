@@ -66,7 +66,7 @@ _setpoint_override_warned: set[str] = set()
 # the active idle_off_after_minutes (mirrored per cycle by async_apply). Same
 # cross-cycle module-state pattern as _last_commands above.
 _idle_setback_since: dict[str, float] = {}
-_idle_cfg: dict[str, float] = {"off_after_minutes": 0.0}
+_idle_cfg: dict[str, float] = {"off_after_minutes": 0.0, "setback_offset": DEFAULT_IDLE_SETBACK_OFFSET}
 
 
 def _cache_entry(service: str, data: dict) -> dict[str, Any]:
@@ -106,6 +106,7 @@ def clear_command_cache() -> None:
     _setpoint_override_warned.clear()
     _idle_setback_since.clear()
     _idle_cfg["off_after_minutes"] = 0.0
+    _idle_cfg["setback_offset"] = DEFAULT_IDLE_SETBACK_OFFSET
 
 
 def _resolve_idle_setpoint(
@@ -396,7 +397,7 @@ async def async_idle_device(
     # is not effective (e.g. Wavin Sentio with min_temp=0 or high min_temp).
     fallback_temp: float | None = None
     if targets is not None and targets.heat is not None:
-        fallback_temp = celsius_to_ha_temp(hass, targets.heat - DEFAULT_IDLE_SETBACK_OFFSET)
+        fallback_temp = celsius_to_ha_temp(hass, targets.heat - _idle_cfg["setback_offset"])
 
     # --- LOW branch ---
     # Some TRVs (e.g. battery Zigbee valves) enter deep-sleep hibernation after
@@ -447,9 +448,9 @@ async def async_idle_device(
 
         # Compute setback temperature
         if current_hvac == "heat" and targets.heat is not None:
-            setback_temp = targets.heat - DEFAULT_IDLE_SETBACK_OFFSET
+            setback_temp = targets.heat - _idle_cfg["setback_offset"]
         elif current_hvac == "cool" and targets.cool is not None:
-            setback_temp = targets.cool + DEFAULT_IDLE_SETBACK_OFFSET
+            setback_temp = targets.cool + _idle_cfg["setback_offset"]
         else:
             await async_turn_off_climate(hass, entity_id, area_id=area_id, fallback_setpoint=fallback_temp)
             return
@@ -1233,6 +1234,7 @@ class MPCController:
         ac_heating_boost_target: float | None = None,
         cooling_boost_target: float | None = None,
         idle_off_after_minutes: float = 0.0,
+        idle_setback_offset: float | None = None,
         heat_source_plan: HeatSourcePlan | None = None,
         compressor_forced_on: set[str] | None = None,
         compressor_forced_off: set[str] | None = None,
@@ -1258,6 +1260,9 @@ class MPCController:
         # (a module function called from many sites) can read it without
         # threading it through every call.
         _idle_cfg["off_after_minutes"] = idle_off_after_minutes
+        _idle_cfg["setback_offset"] = (
+            idle_setback_offset if idle_setback_offset is not None else DEFAULT_IDLE_SETBACK_OFFSET
+        )
 
         # Resolve effective target_temp for the current mode
         if mode == MODE_HEATING:
