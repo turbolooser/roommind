@@ -69,6 +69,12 @@ class TestCoverageGaps:
         entry_climate_control.unique_id = f"{DOMAIN}_climate_control"
         entry_climate_control.entity_id = "switch.roommind_climate_control"
 
+        # Per-compressor-group entity (keyed by group id, not area) -- kept
+        entry_demand = MagicMock()
+        entry_demand.platform = DOMAIN
+        entry_demand.unique_id = f"{DOMAIN}_demand_b1ba23a2-f92e-470a-b8b1-1b4fd2e5e17d"
+        entry_demand.entity_id = "sensor.roommind_demand_b1ba23a2_debug"
+
         mock_registry.entities.values.return_value = [
             entry_valid_temp,
             entry_valid_mode,
@@ -78,6 +84,7 @@ class TestCoverageGaps:
             entry_other,
             entry_vacation,
             entry_climate_control,
+            entry_demand,
         ]
 
         with patch(
