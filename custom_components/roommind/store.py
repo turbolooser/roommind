@@ -87,6 +87,9 @@ class RoomMindStore:
         self._data: dict[str, dict] = {}
         self._settings: dict = {}
         self._thermal_data: dict = {}
+        # Learned per-compressor-group demand model (Phase 0.5: reserved,
+        # populated by the demand-learning feature; empty = no model yet).
+        self._demand_data: dict = {}
 
     async def async_load(self) -> None:
         """Load room data from the HA store."""
@@ -98,6 +101,7 @@ class RoomMindStore:
 
         self._settings = stored.get("settings", {}) if stored else {}
         self._thermal_data = stored.get("thermal_data", {}) if stored else {}
+        self._demand_data = stored.get("demand_data", {}) if stored else {}
 
         # One-time migrations (combined into single pass + single save)
         device_migrated = 0
@@ -131,7 +135,12 @@ class RoomMindStore:
     async def _async_save(self) -> None:
         """Persist current room data to the HA store."""
         await self._store.async_save(
-            {"rooms": self._data, "settings": self._settings, "thermal_data": self._thermal_data}
+            {
+                "rooms": self._data,
+                "settings": self._settings,
+                "thermal_data": self._thermal_data,
+                "demand_data": self._demand_data,
+            }
         )
 
     def get_rooms(self) -> dict[str, dict]:
@@ -177,6 +186,20 @@ class RoomMindStore:
     async def async_clear_all_thermal_data(self) -> None:
         """Clear all thermal learning data."""
         self._thermal_data = {}
+        await self._async_save()
+
+    def get_demand_data(self) -> dict:
+        """Return a deep copy of the learned demand model (per group)."""
+        return copy.deepcopy(dict(self._demand_data))
+
+    async def async_save_demand_data(self, data: dict) -> None:
+        """Replace the learned demand model and persist."""
+        self._demand_data = data
+        await self._async_save()
+
+    async def async_clear_all_demand_data(self) -> None:
+        """Clear all learned demand-model data."""
+        self._demand_data = {}
         await self._async_save()
 
     @staticmethod
