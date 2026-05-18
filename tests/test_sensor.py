@@ -8,6 +8,7 @@ import pytest
 
 from custom_components.roommind.const import DOMAIN
 from custom_components.roommind.sensor import (
+    RoomMindDemandDebugSensor,
     RoomMindModeSensor,
     RoomMindTargetTemperatureSensor,
     _create_room_entities,
@@ -15,10 +16,10 @@ from custom_components.roommind.sensor import (
 )
 
 
-def _make_coordinator(rooms_data=None):
+def _make_coordinator(rooms_data=None, demand_debug=None):
     """Build a mock coordinator with data dict."""
     coordinator = MagicMock()
-    coordinator.data = {"rooms": rooms_data or {}}
+    coordinator.data = {"rooms": rooms_data or {}, "demand_debug": demand_debug or {}}
     return coordinator
 
 
@@ -150,3 +151,76 @@ def test_sensor_entity_id():
     mode_sensor = RoomMindModeSensor(coordinator, "room_a")
     assert temp_sensor.entity_id == f"sensor.{DOMAIN}_room_a_target_temp"
     assert mode_sensor.entity_id == f"sensor.{DOMAIN}_room_a_mode"
+
+
+# --- Demand debug (flight recorder) sensor ---------------------------------
+
+
+@pytest.mark.asyncio
+async def test_setup_entry_creates_demand_sensor(hass, mock_config_entry, store):
+    """A demand debug sensor is created per compressor group."""
+    await store.async_load()
+    await store.async_save_room("room_a", {"thermostats": ["climate.trv1"]})
+    await store.async_save_settings(
+        {"compressor_groups": [{"id": "grp-uuid-1234", "name": "", "members": ["climate.x"]}]}
+    )
+
+    coordinator = _make_coordinator()
+    hass.data[DOMAIN] = {mock_config_entry.entry_id: coordinator, "store": store}
+    add_entities = MagicMock()
+
+    await async_setup_entry(hass, mock_config_entry, add_entities)
+
+    entities = add_entities.call_args[0][0]
+    demand = [e for e in entities if isinstance(e, RoomMindDemandDebugSensor)]
+    assert len(demand) == 1
+    assert len(entities) == 3  # 2 room sensors + 1 demand sensor
+
+
+def test_demand_sensor_ids_fallback_to_short_group_id():
+    """Empty group name → entity id derived from the short group id."""
+    coordinator = _make_coordinator()
+    s = RoomMindDemandDebugSensor(coordinator, "b1ba23a2-f92e-470a-b8b1-1b4fd2e5e17d", "")
+    assert s.unique_id == f"{DOMAIN}_demand_b1ba23a2-f92e-470a-b8b1-1b4fd2e5e17d"
+    assert s.entity_id == f"sensor.{DOMAIN}_demand_b1ba23a2_debug"
+
+
+def test_demand_sensor_ids_use_slugified_name():
+    coordinator = _make_coordinator()
+    s = RoomMindDemandDebugSensor(coordinator, "gid-1", "Außengerät EG")
+    assert s.entity_id == f"sensor.{DOMAIN}_demand_aussengerat_eg_debug"
+
+
+def test_demand_sensor_value_and_attributes():
+    """State is the computed target; attributes carry the intent signals."""
+    debug = {
+        "gid-1": {
+            "name": "grp",
+            "target": 45,
+            "held_reason": "applied",
+            "applied": True,
+            "base": 35,
+            "fb": 0.6,
+            "fb_mean": 0.4,
+            "fb_max": 0.6,
+            "n_active": 2,
+            "raw": 71.0,
+            "outdoor": 10.5,
+            "demand_min": 30,
+            "demand_max": 50,
+        }
+    }
+    s = RoomMindDemandDebugSensor(_make_coordinator(demand_debug=debug), "gid-1", "grp")
+    assert s.native_value == 45
+    attrs = s.extra_state_attributes
+    assert "target" not in attrs
+    assert attrs["held_reason"] == "applied"
+    assert attrs["fb_max"] == 0.6
+    assert attrs["n_active"] == 2
+
+
+def test_demand_sensor_no_data():
+    """No demand_debug entry yet → None state, empty attributes."""
+    s = RoomMindDemandDebugSensor(_make_coordinator(), "gid-1", "grp")
+    assert s.native_value is None
+    assert s.extra_state_attributes == {}
