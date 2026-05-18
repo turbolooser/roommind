@@ -236,6 +236,29 @@ async def test_thermal_data_migration_from_old_store(store):
     assert store.get_thermal_data() == {}
 
 
+@pytest.mark.asyncio
+async def test_demand_data_persistence(store):
+    """Learned demand model can be saved, retrieved and cleared."""
+    await store.async_load()
+    data = {"grp1": {"gain": 1.2, "n": 42}}
+    await store.async_save_demand_data(data)
+    result = store.get_demand_data()
+    assert result == data
+    # returned copy is detached from internal state
+    result["grp1"]["gain"] = 99
+    assert store.get_demand_data()["grp1"]["gain"] == 1.2
+    await store.async_clear_all_demand_data()
+    assert store.get_demand_data() == {}
+
+
+@pytest.mark.asyncio
+async def test_demand_data_migration_from_old_store(store):
+    """Old store without demand_data key loads cleanly to empty."""
+    store._store.async_load = AsyncMock(return_value={"rooms": {"r1": {"area_id": "r1", "schedules": []}}})
+    await store.async_load()
+    assert store.get_demand_data() == {}
+
+
 # ---------------------------------------------------------------------------
 # Split heat/cool temperature migration
 # ---------------------------------------------------------------------------
