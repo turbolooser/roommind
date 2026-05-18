@@ -72,7 +72,7 @@ from .managers.compressor_group_manager import (
     resolve_master_action,
 )
 from .managers.cover_orchestrator import CoverOrchestrator, CoverResult
-from .managers.demand_controller import compute_demand_percent
+from .managers.demand_controller import compute_demand
 from .managers.ekf_training_manager import EkfTrainingManager
 from .managers.heat_source_orchestrator import HeatSourcePlan, evaluate_heat_sources
 from .managers.mold_manager import MoldManager
@@ -158,6 +158,9 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         # Group demand control: gid -> (applied_percent, monotonic_ts) for
         # hysteresis / min-hold anti-thrash.
         self._group_demand_state: dict[str, tuple[int, float]] = {}
+        # Per-group demand "flight recorder": last computed intent +
+        # diagnostics, surfaced via a recorded sensor for offline analysis.
+        self._demand_debug: dict[str, dict] = {}
         # Track which rooms already have entity platform entities registered
         self._entity_areas: set[str] = set()
         # Min-run enforcement: timestamp when current non-idle mode started
@@ -365,7 +368,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             self._valve_manager.actuation_dirty = False
 
         self.rooms = room_states
-        return {"rooms": room_states}
+        return {"rooms": room_states, "demand_debug": self._demand_debug}
 
     def _read_room_sensors(
         self,
@@ -1918,21 +1921,45 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                     continue
                 active_pfs.append(max(0.0, min(1.0, rs.get("heating_power", 0) / 100.0)))
 
-            target = compute_demand_percent(
+            result = compute_demand(
                 self.outdoor_temp_effective,
                 active_pfs,
                 demand_min,
                 demand_max,
             )
+            target = result.percent
 
             prev = self._group_demand_state.get(gid)
             now = time.monotonic()
+            held_reason = "applied"
             if prev is not None:
                 prev_val, prev_ts = prev
                 if abs(target - prev_val) < hysteresis:
-                    continue  # within hysteresis band — hold
-                if now - prev_ts < min_hold_s:
-                    continue  # min-hold not elapsed — anti-thrash
+                    held_reason = "hysteresis"  # within band — hold
+                elif now - prev_ts < min_hold_s:
+                    held_reason = "min_hold"  # min-hold not elapsed — anti-thrash
+
+            # Flight recorder: always record the controller's intent +
+            # diagnostics (even when held), so offline analysis can separate
+            # "what the controller wanted" from "what the device did".
+            self._demand_debug[gid] = {
+                "name": group.name or gid,
+                "target": target,
+                "held_reason": held_reason,
+                "applied": False,
+                "base": result.base,
+                "fb": round(result.fb, 4),
+                "fb_mean": round(result.fb_mean, 4),
+                "fb_max": round(result.fb_max, 4),
+                "n_active": result.n_active,
+                "raw": round(result.raw, 2),
+                "outdoor": self.outdoor_temp_effective,
+                "demand_min": demand_min,
+                "demand_max": demand_max,
+            }
+
+            if held_reason != "applied":
+                continue
 
             applied = False
             for eid in select_entities:
@@ -1957,6 +1984,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                         eid,
                         exc_info=True,
                     )
+            self._demand_debug[gid]["applied"] = applied
             if applied:
                 self._group_demand_state[gid] = (target, now)
 
