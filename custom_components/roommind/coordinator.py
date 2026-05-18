@@ -1639,6 +1639,9 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         cover_only = ("_cover_auto", "_cover_paused")
         # Global entities (not per-room) that should never be cleaned up
         global_uids = {f"{DOMAIN}_vacation"}
+        # Per-compressor-group entities (not per-room): keyed by group id,
+        # not area_id, so they must be exempt from the room-matching sweep.
+        global_uid_prefixes = (f"{DOMAIN}_demand_",)
 
         to_remove: list[str] = []
         for entity_entry in registry.entities.values():
@@ -1646,6 +1649,8 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             if not isinstance(uid, str) or not uid.startswith(f"{DOMAIN}_"):
                 continue
             if uid in global_uids:
+                continue
+            if uid.startswith(global_uid_prefixes):
                 continue
 
             # Extract area_id: roommind_{area_id}_{suffix}
