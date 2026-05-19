@@ -90,6 +90,19 @@ DEFAULT_DEMAND_MIN = 30
 DEFAULT_DEMAND_MAX = 95
 DEFAULT_DEMAND_HYSTERESIS = 10  # %-points: don't re-apply smaller changes
 DEFAULT_DEMAND_MIN_HOLD_MINUTES = 10  # min between demand changes (anti-thrash)
+# Asymmetric slew (anti ping-pong): demand rises immediately to cover heat
+# need, but only steps *down* after the active zones have stayed satisfied for
+# this long — so a single inverter cycle around setpoint can't collapse the
+# cap to base and trigger an overshoot/limit-cycle. 0 = legacy behaviour.
+DEFAULT_DEMAND_DOWN_HOLD_MINUTES = 5
+# Σδ (summed sign-normalised zone error) at/below this counts as "active zones
+# satisfied" — matches the trim's neutral band so a decrease is only released
+# once the trim itself wants neutral.
+DEMAND_DOWN_SETTLED_DELTA = 0.3
+# Mean active-member heating_power (%, = MPC power_fraction × 100) at/below
+# this counts as "compressor genuinely low" — second gate for a step-down so
+# we don't drop the cap while the unit is still modulating hard.
+DEMAND_DOWN_MAX_HEATING_POWER = 25.0
 DEMAND_GRID_STEP = 5  # device demand select granularity (%)
 # Outdoor-temp feedforward: heat pumps lose capacity when cold → need a higher
 # compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,
