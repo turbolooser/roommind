@@ -230,6 +230,26 @@ async def test_slew_down_wait_when_zones_not_satisfied(hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
+async def test_slew_release_ignores_bangbang_heating_power(hass, mock_config_entry):
+    """Regression (live 2026-05-19): heating_power must NOT gate the step-down.
+
+    heating_power = MPC power_fraction × 100 is bang-bang ≈100 whenever the
+    zone heats at all, so an hp gate pinned the cap high until full idle.
+    Σδ-sustained is the sole release gate; hp is telemetry only.
+    """
+    c = _setup(hass, mock_config_entry, sel_current="60")
+    c._group_demand_state[GID] = (60, time.monotonic())
+    c._group_demand_downhold[GID] = time.monotonic() - (5 * 60 + 1)  # hold elapsed
+    # Zone satisfied (Σδ 0) but compressor pf saturated at 100.
+    rs = {"r1": {"commanded_mode": "heating", "current_temp": 20.0, "target_temp": 20.0, "heating_power": 100}}
+    await c._async_apply_group_demand(rs, _rooms(), _SLEW)
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "35"
+    assert c._demand_debug[GID]["slew"] == "down_release"
+    assert c._demand_debug[GID]["mean_hp"] == 100.0  # logged, not gated
+
+
+@pytest.mark.asyncio
 async def test_slew_disabled_allows_immediate_down(hass, mock_config_entry):
     """demand_down_hold_minutes = 0 → legacy immediate step-down."""
     s = dict(_SLEW, demand_down_hold_minutes=0)
