@@ -200,14 +200,13 @@ def test_demand_sensor_value_and_attributes():
             "held_reason": "applied",
             "applied": True,
             "base": 35,
-            "fb": 0.6,
-            "fb_mean": 0.4,
-            "fb_max": 0.6,
+            "adjustment": 8,
+            "total_delta": 0.6,
             "n_active": 2,
-            "raw": 71.0,
+            "raw": 43.0,
             "outdoor": 10.5,
             "demand_min": 30,
-            "demand_max": 50,
+            "demand_max": 95,
         }
     }
     s = RoomMindDemandDebugSensor(_make_coordinator(demand_debug=debug), "gid-1", "grp")
@@ -215,7 +214,8 @@ def test_demand_sensor_value_and_attributes():
     attrs = s.extra_state_attributes
     assert "target" not in attrs
     assert attrs["held_reason"] == "applied"
-    assert attrs["fb_max"] == 0.6
+    assert attrs["adjustment"] == 8
+    assert attrs["total_delta"] == 0.6
     assert attrs["n_active"] == 2
 
 
