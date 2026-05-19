@@ -153,6 +153,7 @@ async def test_min_hold_blocks_genuine_change_then_releases(hass, mock_config_en
         "demand_max": 95,
         "demand_hysteresis": 10,
         "demand_min_hold_minutes": 10,
+        "demand_down_hold_minutes": 0,  # isolate min_hold from the slew gate
     }
     c = _setup(hass, mock_config_entry, sel_current="50")  # device at 50
     c._group_demand_state[GID] = (50, time.monotonic())  # last applied 50, just now
@@ -163,3 +164,92 @@ async def test_min_hold_blocks_genuine_change_then_releases(hass, mock_config_en
     await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), s)
     calls = _demand_calls(hass)
     assert calls and calls[0][0][2]["option"] == "35"
+
+
+# --- asymmetric slew (anti ping-pong) ---------------------------------------
+
+_SLEW = {
+    "demand_control_enabled": True,
+    "demand_select_entities": [SEL],
+    "demand_min": 30,
+    "demand_max": 95,
+    "demand_hysteresis": 10,
+    "demand_min_hold_minutes": 0,  # isolate the slew gate
+    "demand_down_hold_minutes": 5,
+}
+
+
+@pytest.mark.asyncio
+async def test_slew_rise_is_immediate(hass, mock_config_entry):
+    """A demand *rise* is never delayed by the slew (cover heat need now)."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_demand_state[GID] = (30, time.monotonic())  # last applied low
+    await c._async_apply_group_demand(_room_states(delta=2.0), _rooms(), _SLEW)  # → 60
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "60"
+    assert c._demand_debug[GID]["slew"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_slew_holds_governing_value_until_sustained(hass, mock_config_entry):
+    """Step-down is withheld until the zones stay satisfied long enough.
+
+    While held, the *governing* (previous, higher) value is what gets
+    re-asserted — so a drifted device is pulled back up, not down.
+    """
+    c = _setup(hass, mock_config_entry, sel_current="30")  # device drifted low
+    c._group_demand_state[GID] = (60, time.monotonic())  # last applied 60
+    # Satisfied (Σδ 0 ≤ 0.3, no heating_power → mean_hp 0) but hold not elapsed.
+    await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), _SLEW)
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "60"  # held high, not 35
+    assert c._demand_debug[GID]["slew"] == "down_hold"
+
+    # Hold window elapsed → the lower value is released.
+    hass.services.async_call.reset_mock()
+    hass.states.get = MagicMock(return_value=_sel_state("60"))
+    c._group_demand_state[GID] = (60, time.monotonic())
+    c._group_demand_downhold[GID] = time.monotonic() - (5 * 60 + 1)
+    await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), _SLEW)
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "35"
+    assert c._demand_debug[GID]["slew"] == "down_release"
+
+
+@pytest.mark.asyncio
+async def test_slew_down_wait_when_zones_not_satisfied(hass, mock_config_entry):
+    """Zones still need work → cap stays up regardless of the hold timer."""
+    c = _setup(hass, mock_config_entry, sel_current="30")  # drifted low
+    c._group_demand_state[GID] = (60, time.monotonic())
+    # Σδ 0.5 > 0.3 → not settled, even though raw target (43) < 60.
+    await c._async_apply_group_demand(_room_states(delta=0.5), _rooms(), _SLEW)
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "60"
+    assert c._demand_debug[GID]["slew"] == "down_wait"
+    assert GID not in c._group_demand_downhold  # timer reset while unsettled
+
+
+@pytest.mark.asyncio
+async def test_slew_disabled_allows_immediate_down(hass, mock_config_entry):
+    """demand_down_hold_minutes = 0 → legacy immediate step-down."""
+    s = dict(_SLEW, demand_down_hold_minutes=0)
+    c = _setup(hass, mock_config_entry, sel_current="60")
+    c._group_demand_state[GID] = (60, time.monotonic())
+    await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), s)  # → 35
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "35"
+    assert c._demand_debug[GID]["slew"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_flap_counter_tracks_applied_changes(hass, mock_config_entry):
+    """The rolling 1 h flap count increments only on applied value changes."""
+    s = dict(_SLEW, demand_down_hold_minutes=0)
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_demand_state[GID] = (30, time.monotonic())
+    await c._async_apply_group_demand(_room_states(delta=2.0), _rooms(), s)  # 30→60
+    assert c._demand_debug[GID]["flaps_1h"] == 1
+    # Re-assert the same value (device already at 60) → no change counted.
+    hass.states.get = MagicMock(return_value=_sel_state("60"))
+    await c._async_apply_group_demand(_room_states(delta=2.0), _rooms(), s)
+    assert c._demand_debug[GID]["flaps_1h"] == 1
