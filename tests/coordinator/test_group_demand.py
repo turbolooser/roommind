@@ -121,11 +121,12 @@ async def test_hysteresis_holds_small_change_vs_device(hass, mock_config_entry):
 
 @pytest.mark.asyncio
 async def test_device_drift_is_corrected(hass, mock_config_entry):
-    """Regression: device drifted away from intent must be re-applied.
+    """Regression: pure device drift is corrected *immediately*.
 
-    RoomMind last wanted 35 (prev_val=35); the Faikin drifted to 50 on its
-    own. Old intent-vs-intent gate (|35-35|<10) froze forever; the
-    device-based gate sees |35-50|=15 ≥ hysteresis and corrects.
+    RoomMind last applied 35 (unchanged target); the Faikin drifted to 50
+    on its own. Old intent-vs-intent gate froze forever. min_hold must NOT
+    delay this — re-asserting an unchanged target is not a short-cycle —
+    so it corrects even with a large min_hold window still open.
     """
     s = {
         "demand_control_enabled": True,
@@ -133,18 +134,18 @@ async def test_device_drift_is_corrected(hass, mock_config_entry):
         "demand_min": 30,
         "demand_max": 95,
         "demand_hysteresis": 10,
-        "demand_min_hold_minutes": 0,
+        "demand_min_hold_minutes": 10,  # wide open, must be bypassed
     }
     c = _setup(hass, mock_config_entry, sel_current="50")  # drifted
-    c._group_demand_state[GID] = (35, time.monotonic())  # last intent = 35
+    c._group_demand_state[GID] = (35, time.monotonic())  # last applied 35, just now
     await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), s)  # target 35
     calls = _demand_calls(hass)
     assert calls and calls[0][0][2]["option"] == "35"
 
 
 @pytest.mark.asyncio
-async def test_min_hold_blocks_recent_change_then_releases(hass, mock_config_entry):
-    """Off-target device but changed too recently → held by min_hold."""
+async def test_min_hold_blocks_genuine_change_then_releases(hass, mock_config_entry):
+    """A *genuine* demand change too soon → held by min_hold, then released."""
     s = {
         "demand_control_enabled": True,
         "demand_select_entities": [SEL],
@@ -153,12 +154,12 @@ async def test_min_hold_blocks_recent_change_then_releases(hass, mock_config_ent
         "demand_hysteresis": 10,
         "demand_min_hold_minutes": 10,
     }
-    c = _setup(hass, mock_config_entry, sel_current="50")  # off target
-    c._group_demand_state[GID] = (35, time.monotonic())  # just changed
-    await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), s)  # target 35
-    assert not _demand_calls(hass)  # |35-50|≥hyst but min_hold not elapsed
-    # min-hold elapsed → correction is released
-    c._group_demand_state[GID] = (35, time.monotonic() - 11 * 60)
+    c = _setup(hass, mock_config_entry, sel_current="50")  # device at 50
+    c._group_demand_state[GID] = (50, time.monotonic())  # last applied 50, just now
+    await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), s)  # target 35 ≠ 50
+    assert not _demand_calls(hass)  # genuine change, min_hold not elapsed
+    # min-hold elapsed → the new demand level is released
+    c._group_demand_state[GID] = (50, time.monotonic() - 11 * 60)
     await c._async_apply_group_demand(_room_states(delta=0.0), _rooms(), s)
     calls = _demand_calls(hass)
     assert calls and calls[0][0][2]["option"] == "35"
