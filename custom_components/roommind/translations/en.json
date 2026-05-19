@@ -28,7 +28,8 @@
           "demand_min": "Min demand (%)",
           "demand_max": "Max demand (%)",
           "demand_hysteresis": "Demand hysteresis (%)",
-          "demand_min_hold_minutes": "Min hold between demand changes (min)"
+          "demand_min_hold_minutes": "Min hold between demand changes (min)",
+          "demand_down_hold_minutes": "Demand step-down hold (min)"
         },
         "data_description": {
           "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
@@ -43,7 +44,8 @@
           "demand_min": "Lowest demand cap RoomMind will set (also used when the group is idle).",
           "demand_max": "Highest demand cap RoomMind will set.",
           "demand_hysteresis": "Don't re-apply demand changes smaller than this (anti-flutter).",
-          "demand_min_hold_minutes": "Minimum time between demand changes (anti short-cycle of the cap)."
+          "demand_min_hold_minutes": "Minimum time between demand changes (anti short-cycle of the cap).",
+          "demand_down_hold_minutes": "Anti ping-pong: only lower the demand cap after the rooms have stayed satisfied this long. Demand still rises immediately to cover heat need. 0 = off (legacy)."
         }
       }
     }
