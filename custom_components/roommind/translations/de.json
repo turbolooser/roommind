@@ -25,7 +25,8 @@
           "demand_min": "Min. Demand (%)",
           "demand_max": "Max. Demand (%)",
           "demand_hysteresis": "Demand-Hysterese (%)",
-          "demand_min_hold_minutes": "Mindest-Haltezeit zwischen Demand-Änderungen (Min.)"
+          "demand_min_hold_minutes": "Mindest-Haltezeit zwischen Demand-Änderungen (Min.)",
+          "demand_down_hold_minutes": "Haltezeit vor Demand-Absenkung (Min.)"
         },
         "data_description": {
           "vacation_action": "\"Absenkung\" heizt auf die Urlaubstemperatur. \"Aus\" deaktiviert aktives Heizen (nur Frostschutz); Kühlen folgt weiter Eco-Kühlen.",
@@ -37,7 +38,8 @@
           "demand_min": "Niedrigster Demand-Cap, den RoomMind setzt (auch wenn die Gruppe idle ist).",
           "demand_max": "Höchster Demand-Cap, den RoomMind setzt.",
           "demand_hysteresis": "Demand-Änderungen kleiner als dies nicht erneut anwenden (Anti-Flattern).",
-          "demand_min_hold_minutes": "Mindestzeit zwischen Demand-Änderungen (Anti-Takten des Caps)."
+          "demand_min_hold_minutes": "Mindestzeit zwischen Demand-Änderungen (Anti-Takten des Caps).",
+          "demand_down_hold_minutes": "Anti-Ping-Pong: Demand-Cap erst absenken, wenn die Räume so lange durchgehend zufrieden waren. Demand steigt weiterhin sofort, um Wärmebedarf zu decken. 0 = aus (Legacy)."
         }
       }
     }
