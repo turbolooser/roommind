@@ -49,7 +49,9 @@ async def async_setup_entry(
     for group in store.get_settings().get("compressor_groups", []):
         gid = group.get("id")
         if gid:
-            entities.append(RoomMindDemandDebugSensor(coordinator, gid, group.get("name", "")))
+            name = group.get("name", "")
+            entities.append(RoomMindDemandDebugSensor(coordinator, gid, name))
+            entities.append(RoomMindDemandFlapSensor(coordinator, gid, name))
 
     if entities:
         async_add_entities(entities)
@@ -158,3 +160,37 @@ class RoomMindDemandDebugSensor(CoordinatorEntity, SensorEntity):
         if entry is None:
             return {}
         return {k: v for k, v in entry.items() if k != "target"}
+
+
+class RoomMindDemandFlapSensor(CoordinatorEntity, SensorEntity):
+    """Anti-ping-pong watchdog: applied demand changes in the last hour.
+
+    A settled controller holds the governing cap → this stays near 0. A limit
+    cycle (the trim flapping the cap with each inverter cycle) drives it up,
+    so a recorded trace makes the anomaly obvious without log spelunking.
+    """
+
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "changes/h"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:sine-wave"
+
+    def __init__(self, coordinator: RoomMindCoordinator, group_id: str, group_name: str) -> None:
+        """Initialize the demand flapping sensor for a compressor group."""
+        super().__init__(coordinator)
+        self._group_id = group_id
+        slug = slugify(group_name) if group_name else group_id.split("-", 1)[0]
+        # Prefix kept under roommind_demand_ so the orphan sweep exempts it.
+        self._attr_unique_id = f"{DOMAIN}_demand_{group_id}_flaps"
+        self._attr_name = f"demand {slug} flaps"
+        self.entity_id = f"sensor.{DOMAIN}_demand_{slug}_flaps"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return applied demand changes in the rolling 1 h window."""
+        data = self.coordinator.data or {}
+        entry = data.get("demand_debug", {}).get(self._group_id)
+        if not isinstance(entry, dict):
+            return None
+        val = entry.get("flaps_1h")
+        return int(val) if isinstance(val, (int, float)) else None

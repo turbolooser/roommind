@@ -99,6 +99,7 @@ class TestOptionsFlow:
             "demand_max": 95,
             "demand_hysteresis": 10,
             "demand_min_hold_minutes": 10,
+            "demand_down_hold_minutes": 5,
         }
         result = await flow.async_step_init(user_input)
 
@@ -137,6 +138,7 @@ class TestOptionsFlow:
                 "demand_max": 95,
                 "demand_hysteresis": 10,
                 "demand_min_hold_minutes": 10,
+                "demand_down_hold_minutes": 5,
             }
         )
 
