@@ -22,6 +22,7 @@ from .const import (
     DEFAULT_COMFORT_COOL,
     DEFAULT_COMFORT_HEAT,
     DEFAULT_DEMAND_CONTROL_ENABLED,
+    DEFAULT_DEMAND_DOWN_HOLD_MINUTES,
     DEFAULT_DEMAND_HYSTERESIS,
     DEFAULT_DEMAND_MAX,
     DEFAULT_DEMAND_MIN,
@@ -32,6 +33,8 @@ from .const import (
     DEFAULT_OUTDOOR_HEATING_MAX,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
+    DEMAND_DOWN_MAX_HEATING_POWER,
+    DEMAND_DOWN_SETTLED_DELTA,
     DOMAIN,
     HEATING_BOOST_TARGET,
     HISTORY_ROTATE_CYCLES,
@@ -155,6 +158,13 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         # Group demand control: gid -> (applied_percent, monotonic_ts) for
         # hysteresis / min-hold anti-thrash.
         self._group_demand_state: dict[str, tuple[int, float]] = {}
+        # gid -> monotonic ts since which a *lower* demand has been
+        # continuously requested while the zones stayed satisfied. Drives the
+        # asymmetric slew (anti ping-pong); reset on any rise / unsettled.
+        self._group_demand_downhold: dict[str, float] = {}
+        # gid -> monotonic timestamps of applied demand *changes*, pruned to a
+        # rolling 1 h window → feeds the flapping diagnostic sensor.
+        self._group_demand_changes: dict[str, list[float]] = {}
         # Per-group demand "flight recorder": last computed intent +
         # diagnostics, surfaced via a recorded sensor for offline analysis.
         self._demand_debug: dict[str, dict] = {}
@@ -1984,6 +1994,8 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         for gid, group in self._compressor_manager.get_groups().items():
             member_set = set(group.members)
             active_deltas: list[float] = []
+            active_hp: list[float] = []
+            zone_dbg: list[tuple[str, float]] = []
             for area_id, room in rooms_config.items():
                 if not room.get("climate_control_enabled", True):
                     continue
@@ -2004,9 +2016,14 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 # work. Heating wants temp up (tgt-cur); cooling wants it
                 # down (cur-tgt). Lets the symmetric trim band work in both.
                 if mode == MODE_COOLING:
-                    active_deltas.append(float(cur) - float(tgt))
+                    delta = float(cur) - float(tgt)
                 else:
-                    active_deltas.append(float(tgt) - float(cur))
+                    delta = float(tgt) - float(cur)
+                active_deltas.append(delta)
+                hp = rs.get("heating_power")
+                if isinstance(hp, (int, float)):
+                    active_hp.append(float(hp))
+                zone_dbg.append((area_id, round(delta, 2)))
 
             result = compute_demand(
                 self.outdoor_temp_effective,
@@ -2014,15 +2031,49 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 demand_min,
                 demand_max,
             )
-            target = result.percent
+            raw_target = result.percent
+
+            now = time.monotonic()
+            prev = self._group_demand_state.get(gid)
+            prev_target = prev[0] if prev is not None else None
+            mean_hp = sum(active_hp) / len(active_hp) if active_hp else 0.0
+
+            # Asymmetric slew (anti ping-pong): a single inverter cycle around
+            # setpoint swings the trim, which used to flap the cap 30↔50 every
+            # ~10 min (RCA 2026-05-19: it was *RoomMind* writing this, not a
+            # Faikin retain — the MQTT command→echo roundtrip just strips the
+            # HA context so the logbook looked source-less). Raise immediately
+            # to cover heat need, but only step *down* once the active zones
+            # have stayed satisfied (Σδ neutral AND compressor genuinely low)
+            # for the configured hold — so the governing *sustained* demand is
+            # what gets sent, not the instantaneous error.
+            down_hold_s = float(settings.get("demand_down_hold_minutes", DEFAULT_DEMAND_DOWN_HOLD_MINUTES)) * 60.0
+            slew_reason = "none"
+            if prev_target is not None and raw_target < prev_target and down_hold_s > 0.0:
+                settled = result.total_delta <= DEMAND_DOWN_SETTLED_DELTA and mean_hp <= DEMAND_DOWN_MAX_HEATING_POWER
+                if settled:
+                    start = self._group_demand_downhold.setdefault(gid, now)
+                    if now - start >= down_hold_s:
+                        target = raw_target  # sustained-satisfied → release step-down
+                        slew_reason = "down_release"
+                    else:
+                        target = prev_target  # hold the governing value longer
+                        slew_reason = "down_hold"
+                else:
+                    self._group_demand_downhold.pop(gid, None)
+                    target = prev_target  # zones not satisfied → keep cap up
+                    slew_reason = "down_wait"
+            else:
+                # Rise, unchanged, or slew disabled → take it; re-arm timer.
+                self._group_demand_downhold.pop(gid, None)
+                target = raw_target
 
             # Self-correcting hold gate: decide against the *actual* device
-            # state, not RoomMind's last intent. Comparing target vs the
-            # remembered intent froze the controller forever once they
-            # converged — so a select that drifted away on its own (e.g.
-            # Faikin retaining 50 after an MQTT reconnect) was never
-            # corrected. The worst (most off-target) configured select
-            # drives the decision so any drifted member forces a rewrite.
+            # state, not RoomMind's last intent — a select that drifted away
+            # on its own (or that we are deliberately holding high via the
+            # slew) must still be re-asserted. The worst (most off-target)
+            # configured select drives the decision so any drifted member
+            # forces a rewrite.
             device_val: int | None = None
             for eid in select_entities:
                 st = self.hass.states.get(eid)
@@ -2035,8 +2086,6 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 if device_val is None or abs(v - target) > abs(device_val - target):
                     device_val = v
 
-            prev = self._group_demand_state.get(gid)
-            now = time.monotonic()
             held_reason = "applied"
             if device_val is not None and abs(target - device_val) < hysteresis:
                 held_reason = "hysteresis"  # device already within band — no write
@@ -2060,40 +2109,75 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 "total_delta": round(result.total_delta, 3),
                 "n_active": result.n_active,
                 "raw": round(result.raw, 2),
+                "raw_target": raw_target,
+                "slew": slew_reason,
+                "mean_hp": round(mean_hp, 1),
+                "zones": zone_dbg,
                 "outdoor": self.outdoor_temp_effective,
                 "demand_min": demand_min,
                 "demand_max": demand_max,
             }
 
-            if held_reason != "applied":
-                continue
-
             applied = False
-            for eid in select_entities:
-                st = self.hass.states.get(eid)
-                if st is not None and st.state == str(target):
-                    applied = True
-                    continue
-                try:
-                    await self.hass.services.async_call(
-                        "select",
-                        "select_option",
-                        {"entity_id": eid, "option": str(target)},
-                        blocking=True,
-                        context=make_roommind_context(),
-                    )
-                    applied = True
-                except Exception:  # noqa: BLE001
-                    _LOGGER.warning(
-                        "Group '%s': failed to set demand %s%% on '%s'",
-                        group.name,
-                        target,
-                        eid,
-                        exc_info=True,
-                    )
-            self._demand_debug[gid]["applied"] = applied
-            if applied:
-                self._group_demand_state[gid] = (target, now)
+            if held_reason == "applied":
+                for eid in select_entities:
+                    st = self.hass.states.get(eid)
+                    if st is not None and st.state == str(target):
+                        applied = True
+                        continue
+                    try:
+                        await self.hass.services.async_call(
+                            "select",
+                            "select_option",
+                            {"entity_id": eid, "option": str(target)},
+                            blocking=True,
+                            context=make_roommind_context(),
+                        )
+                        applied = True
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.warning(
+                            "Group '%s': failed to set demand %s%% on '%s'",
+                            group.name,
+                            target,
+                            eid,
+                            exc_info=True,
+                        )
+                self._demand_debug[gid]["applied"] = applied
+                if applied:
+                    self._group_demand_state[gid] = (target, now)
+
+            # Flapping metric: applied *value changes* in a rolling 1 h
+            # window. A healthy controller settles → few/zero; a limit cycle
+            # shows up as a high count. Recorded via a diagnostic sensor.
+            changed = applied and target != prev_target
+            changes = self._group_demand_changes.setdefault(gid, [])
+            if changed:
+                changes.append(now)
+            cutoff = now - 3600.0
+            changes[:] = [t for t in changes if t >= cutoff]
+            flaps = len(changes)
+            self._demand_debug[gid]["flaps_1h"] = flaps
+
+            _LOGGER.log(
+                logging.INFO if changed else logging.DEBUG,
+                "demand grp=%s out=%s base=%d adj=%+d sd=%.2f n=%d hp=%.0f "
+                "z=%s raw=%d tgt=%d dev=%s held=%s slew=%s appl=%s flaps1h=%d",
+                group.name or gid,
+                self.outdoor_temp_effective,
+                result.base,
+                result.adjustment,
+                result.total_delta,
+                result.n_active,
+                mean_hp,
+                zone_dbg,
+                raw_target,
+                target,
+                device_val,
+                held_reason,
+                slew_reason,
+                applied,
+                flaps,
+            )
 
     async def _async_control_master_devices(
         self,
