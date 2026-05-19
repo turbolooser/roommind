@@ -16,6 +16,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     DEFAULT_DEMAND_CONTROL_ENABLED,
+    DEFAULT_DEMAND_DOWN_HOLD_MINUTES,
     DEFAULT_DEMAND_HYSTERESIS,
     DEFAULT_DEMAND_MAX,
     DEFAULT_DEMAND_MIN,
@@ -76,6 +77,7 @@ class RoomMindOptionsFlow(OptionsFlow):
                         "demand_max": user_input["demand_max"],
                         "demand_hysteresis": user_input["demand_hysteresis"],
                         "demand_min_hold_minutes": user_input["demand_min_hold_minutes"],
+                        "demand_down_hold_minutes": user_input["demand_down_hold_minutes"],
                     }
                 )
             return self.async_create_entry(title="", data={})
@@ -91,6 +93,7 @@ class RoomMindOptionsFlow(OptionsFlow):
         current_demand_max = settings.get("demand_max", DEFAULT_DEMAND_MAX)
         current_demand_hyst = settings.get("demand_hysteresis", DEFAULT_DEMAND_HYSTERESIS)
         current_demand_hold = settings.get("demand_min_hold_minutes", DEFAULT_DEMAND_MIN_HOLD_MINUTES)
+        current_demand_down_hold = settings.get("demand_down_hold_minutes", DEFAULT_DEMAND_DOWN_HOLD_MINUTES)
 
         schema = vol.Schema(
             {
@@ -148,6 +151,11 @@ class RoomMindOptionsFlow(OptionsFlow):
                     )
                 ),
                 vol.Required("demand_min_hold_minutes", default=current_demand_hold): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=60, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required("demand_down_hold_minutes", default=current_demand_down_hold): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=60, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX
                     )
