@@ -1,14 +1,20 @@
 """Compressor-group demand controller (pure compute).
 
-Hybrid: an outdoor-temperature feedforward sets a weather-appropriate base
-demand %, the aggregate of active member ``power_fraction`` pushes it toward
-the configured maximum. Result is clamped to [demand_min, demand_max] and
-snapped to the device's demand-select grid. Pure / HA-free → unit-testable.
+Phase 1 — capacity-aware trim model. An outdoor-temperature feedforward sets
+a weather-appropriate *base* demand %. A small **symmetric trim** derived
+from the summed temperature error (Σ of ``target − actual`` over the active
+member zones, sign-normalised so "needs more work" is always positive) nudges
+the base up (rooms too far from target) or down (rooms already past target).
 
-Aggregation note (Phase 0.5): a multi-split outdoor compressor modulates to
-satisfy its *most demanding* indoor zone, not the average of all zones. The
-aggregate therefore uses the **maximum** active power_fraction. ``fb_mean`` is
-still computed and surfaced for diagnostics / offline analysis.
+This reproduces the field-proven external controller
+(``sensor.klima_neu_demand_gesamt``): the base dominates and the trim is a
+narrow ±band, so steady state ≈ base (≈30–35 % in mild weather) and the
+result no longer pins to ``demand_max`` whenever a saturated MPC
+``power_fraction`` (≈1.0 during any heating) is present — the defect the
+previous pf-blend produced. ``demand_max`` is now a pure safety ceiling.
+
+Result is clamped to ``[demand_min, demand_max]`` and snapped to the device
+demand-select grid. Pure / HA-free → unit-testable.
 """
 
 from __future__ import annotations
@@ -29,12 +35,11 @@ class DemandResult:
     """
 
     percent: int
-    base: int
-    fb: float  # aggregated power_fraction actually used (Phase 0.5: = fb_max)
-    fb_mean: float  # mean of active power_fractions (diagnostic only)
-    fb_max: float  # max of active power_fractions
+    base: int  # weather feedforward demand %
+    adjustment: int  # symmetric trim applied to base (±band)
+    total_delta: float  # Σ of active members' sign-normalised temp error
     n_active: int  # number of active (non-idle) members
-    raw: float  # pre-snap, pre-clamp blended value
+    raw: float  # base + adjustment, pre-clamp / pre-snap
 
 
 def _feedforward_base(outdoor_temp: float, curve: Sequence[tuple[float, int]]) -> int:
@@ -43,6 +48,25 @@ def _feedforward_base(outdoor_temp: float, curve: Sequence[tuple[float, int]]) -
         if outdoor_temp > threshold:
             return base
     return curve[-1][1]
+
+
+def _delta_adjustment(total_delta: float) -> int:
+    """Symmetric trim band, ported 1:1 from ``klima_neu_demand_gesamt``.
+
+    ``total_delta`` is the summed sign-normalised error of the active zones:
+    positive → still need work (boost), negative → already overshot (reduce).
+    """
+    if total_delta < -1.5:
+        return -15
+    if total_delta < -0.5:
+        return -8
+    if total_delta > 1.5:
+        return 25
+    if total_delta > 0.8:
+        return 15
+    if total_delta > 0.3:
+        return 8
+    return 0
 
 
 def _snap(value: float, grid: int, lo: int, hi: int) -> int:
@@ -54,7 +78,7 @@ def _snap(value: float, grid: int, lo: int, hi: int) -> int:
 
 def compute_demand(
     outdoor_temp: float | None,
-    active_power_fractions: Sequence[float],
+    active_deltas: Sequence[float],
     demand_min: int,
     demand_max: int,
     *,
@@ -63,8 +87,14 @@ def compute_demand(
 ) -> DemandResult:
     """Return the group demand cap (%) plus diagnostics for one group.
 
-    ``active_power_fractions`` are the power_fractions (0..1) of members whose
-    room is currently *not* idle. Empty → group idle → demand_min.
+    ``active_deltas`` are the sign-normalised temperature errors (positive =
+    zone still needs work) of members whose room is currently *not* idle.
+    Empty → group idle → ``demand_min``.
+
+    The feedforward base is intentionally **not** pre-clamped to
+    ``demand_max``: only the final ``base + adjustment`` sum is clamped, so a
+    cold-weather base above the safety ceiling still trims correctly (matches
+    the legacy controller's single final clamp).
     """
     if demand_max < demand_min:
         demand_max = demand_min
@@ -72,40 +102,33 @@ def compute_demand(
     # Unknown outdoor temp → assume mild (mirrors legacy float(10) default).
     t_out = 10.0 if outdoor_temp is None else outdoor_temp
     base = _feedforward_base(t_out, curve)
-    base = max(demand_min, min(demand_max, base))
 
-    if not active_power_fractions:
+    if not active_deltas:
         return DemandResult(
             percent=_snap(float(demand_min), grid, demand_min, demand_max),
             base=base,
-            fb=0.0,
-            fb_mean=0.0,
-            fb_max=0.0,
+            adjustment=0,
+            total_delta=0.0,
             n_active=0,
             raw=float(demand_min),
         )
 
-    clamped_pfs = [max(0.0, min(1.0, p)) for p in active_power_fractions]
-    fb_mean = sum(clamped_pfs) / len(clamped_pfs)
-    fb_max = max(clamped_pfs)
-    # Multi-split: the most-demanding zone dictates compressor speed.
-    fb = fb_max
-
-    raw = base + (demand_max - base) * fb
+    total_delta = sum(active_deltas)
+    adjustment = _delta_adjustment(total_delta)
+    raw = float(base + adjustment)
     return DemandResult(
         percent=_snap(raw, grid, demand_min, demand_max),
         base=base,
-        fb=fb,
-        fb_mean=fb_mean,
-        fb_max=fb_max,
-        n_active=len(clamped_pfs),
+        adjustment=adjustment,
+        total_delta=total_delta,
+        n_active=len(active_deltas),
         raw=raw,
     )
 
 
 def compute_demand_percent(
     outdoor_temp: float | None,
-    active_power_fractions: Sequence[float],
+    active_deltas: Sequence[float],
     demand_min: int,
     demand_max: int,
     *,
@@ -115,7 +138,7 @@ def compute_demand_percent(
     """Backward-compatible thin wrapper returning only the demand %."""
     return compute_demand(
         outdoor_temp,
-        active_power_fractions,
+        active_deltas,
         demand_min,
         demand_max,
         curve=curve,

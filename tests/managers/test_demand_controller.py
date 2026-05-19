@@ -1,4 +1,9 @@
-"""Tests for the pure compressor-group demand computation."""
+"""Tests for the pure compressor-group demand computation (Phase 1).
+
+Model: demand = clamp_snap(feedforward_base + symmetric_trim(Σ active
+sign-normalised temp errors)). Steady state (Σδ≈0) → base; the trim is a
+narrow ±band, so a saturated zone no longer pins to demand_max.
+"""
 
 from __future__ import annotations
 
@@ -22,30 +27,69 @@ from custom_components.roommind.managers.demand_controller import (
         (-5.0, 70),  # else
     ],
 )
-def test_feedforward_curve_when_idle(t_out, expected_base):
-    """Group idle → demand_min, but base curve still drives the floor logic."""
-    # idle (no active pfs) always returns demand_min
-    assert compute_demand_percent(t_out, [], 30, 95) == 30
+def test_feedforward_base_curve(t_out, expected_base):
+    """Base is the weather feedforward; idle group still returns demand_min."""
+    res = compute_demand(t_out, [], 30, 95)
+    assert res.base == expected_base
+    assert res.percent == 30  # idle (no active deltas) → demand_min
 
 
 @pytest.mark.parametrize(
-    ("pfs", "expected"),
+    ("total_delta", "expected_adj"),
     [
-        ([0.0], 35),  # base only (t=10 → 35)
-        ([1.0, 1.0], 95),  # 35 + (95-35)*1.0
-        ([0.5], 65),  # 35 + 60*0.5
-        ([0.4, 0.6], 70),  # Phase 0.5: max 0.6 → 35 + 60*0.6 = 71 → snap 70
-        ([0.3], 55),  # 35 + 60*0.3 = 53 → snap 55
+        (-2.0, -15),
+        (-1.0, -8),
+        (-0.5, 0),  # boundary: not < -0.5 (strict) → neutral band
+        (0.0, 0),
+        (0.3, 0),  # boundary: not > 0.3 (strict)
+        (0.5, 8),
+        (1.0, 15),
+        (2.0, 25),
     ],
 )
-def test_feedback_blend_and_grid_snap(pfs, expected):
-    assert compute_demand_percent(10.0, pfs, 30, 95) == expected
+def test_symmetric_trim_band(total_delta, expected_adj):
+    """Trim band ported 1:1 from klima_neu_demand_gesamt."""
+    res = compute_demand(10.0, [total_delta], 30, 95)  # base 35
+    assert res.adjustment == expected_adj
+    assert res.total_delta == pytest.approx(total_delta)
 
 
-def test_base_clamped_into_range():
-    """Cold base (70) clamped down to demand_max."""
+@pytest.mark.parametrize(
+    ("deltas", "expected"),
+    [
+        ([0.0], 35),  # base only, no trim
+        ([0.5], 45),  # 35 + 8 = 43 → snap 45
+        ([1.0], 50),  # 35 + 15 = 50
+        ([2.0], 60),  # 35 + 25 = 60  (= field-observed mild-weather peak)
+        ([-1.0], 30),  # 35 - 8 = 27 → clamp up to demand_min
+        ([0.2, 0.2, 0.2], 45),  # Σ=0.6 > 0.3 → +8 → 43 → snap 45
+        ([1.0, 1.0], 60),  # Σ=2.0 > 1.5 → +25 → 60 (no longer pins to max)
+    ],
+)
+def test_demand_blend_and_grid_snap(deltas, expected):
+    assert compute_demand_percent(10.0, deltas, 30, 95) == expected
+
+
+def test_saturated_zone_does_not_pin_to_max():
+    """Regression: one zone far below target must stay near base, not max."""
+    # Single zone 1.2 K below target: Σδ=1.2 → +15 → 35+15 = 50, not 95.
+    assert compute_demand_percent(10.0, [1.2], 30, 95) == 50
+
+
+def test_final_clamp_only_no_early_base_clamp():
+    """Cold base (70) above demand_max clamps only after the trim is added."""
     assert compute_demand_percent(-5.0, [], 30, 50) == 30  # idle → min
-    assert compute_demand_percent(-5.0, [0.0], 30, 50) == 50  # base 70 → clamp 50
+    res = compute_demand(-5.0, [0.0], 30, 50)  # base 70, trim 0
+    assert res.base == 70  # base not pre-clamped
+    assert res.percent == 50  # final clamp to demand_max
+
+
+def test_cold_base_with_negative_trim():
+    """Base 70, rooms slightly overshot → modest reduction, still snapped."""
+    res = compute_demand(-5.0, [-0.6, -0.6], 30, 95)  # Σ=-1.2 → -8
+    assert res.base == 70
+    assert res.adjustment == -8
+    assert res.percent == 60  # 70 - 8 = 62 → snap 60
 
 
 def test_idle_returns_min_snapped():
@@ -54,14 +98,9 @@ def test_idle_returns_min_snapped():
 
 def test_inverted_range_guard():
     assert compute_demand_percent(10.0, [], 30, 20) == 30  # demand_max<min → min
-    # demand_max < demand_min with an active member: range collapses to min
-    res = compute_demand(10.0, [0.8], 30, 20)
+    res = compute_demand(10.0, [0.8], 30, 20)  # range collapses to [30,30]
     assert res.percent == 30
-    assert res.base == 30
-
-
-def test_full_demand_hits_max():
-    assert compute_demand_percent(15.0, [1.0], 30, 95) == 95
+    assert res.base == 35  # base itself is unaffected by the guard
 
 
 def test_feedforward_falls_back_to_last_curve_entry():
@@ -71,38 +110,31 @@ def test_feedforward_falls_back_to_last_curve_entry():
     assert res.base == 50  # no threshold exceeded → curve[-1][1]
 
 
-def test_most_demanding_zone_dictates():
-    """A single hot zone must not be diluted by idle-ish co-members."""
-    # mean would be 0.3 → 35 + 60*0.3 = 53 → snap 55
-    # max is 0.9 → 35 + 60*0.9 = 89 → snap 90
-    assert compute_demand_percent(10.0, [0.9, 0.0, 0.0], 30, 95) == 90
-
-
 def test_compute_demand_diagnostics_active():
     """Rich result exposes the controller's intent for the flight recorder."""
-    res = compute_demand(10.0, [0.4, 0.6], 30, 95)
+    res = compute_demand(10.0, [0.4, 0.6], 30, 95)  # Σ=1.0 > 0.8 → +15
     assert isinstance(res, DemandResult)
     assert res.base == 35
     assert res.n_active == 2
-    assert res.fb_max == pytest.approx(0.6)
-    assert res.fb_mean == pytest.approx(0.5)
-    assert res.fb == res.fb_max  # max aggregation
-    assert res.raw == pytest.approx(35 + 60 * 0.6)
-    assert res.percent == 70
+    assert res.total_delta == pytest.approx(1.0)
+    assert res.adjustment == 15
+    assert res.raw == pytest.approx(50.0)
+    assert res.percent == 50
 
 
 def test_compute_demand_diagnostics_idle():
     res = compute_demand(10.0, [], 30, 95)
     assert res.n_active == 0
-    assert res.fb == 0.0
-    assert res.fb_mean == 0.0
-    assert res.fb_max == 0.0
+    assert res.adjustment == 0
+    assert res.total_delta == 0.0
+    assert res.raw == pytest.approx(30.0)
     assert res.percent == 30
 
 
-def test_pf_values_clamped_into_unit_range():
-    """Out-of-range power fractions are clamped before aggregation."""
-    res = compute_demand(10.0, [1.5, -0.2], 30, 95)
-    assert res.fb_max == 1.0
-    assert res.fb_mean == pytest.approx(0.5)  # (1.0 + 0.0) / 2
-    assert res.percent == 95
+def test_cooling_sign_is_caller_supplied():
+    """compute_demand is sign-agnostic: the coordinator sign-normalises.
+
+    A cooling room 1 K too warm is passed as +1.0 (needs work) → boost,
+    exactly like a heating room 1 K too cold.
+    """
+    assert compute_demand_percent(10.0, [1.0], 30, 95) == 50
