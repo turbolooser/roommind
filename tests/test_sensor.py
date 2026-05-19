@@ -9,6 +9,7 @@ import pytest
 from custom_components.roommind.const import DOMAIN
 from custom_components.roommind.sensor import (
     RoomMindDemandDebugSensor,
+    RoomMindDemandFlapSensor,
     RoomMindModeSensor,
     RoomMindTargetTemperatureSensor,
     _create_room_entities,
@@ -173,8 +174,10 @@ async def test_setup_entry_creates_demand_sensor(hass, mock_config_entry, store)
 
     entities = add_entities.call_args[0][0]
     demand = [e for e in entities if isinstance(e, RoomMindDemandDebugSensor)]
+    flap = [e for e in entities if isinstance(e, RoomMindDemandFlapSensor)]
     assert len(demand) == 1
-    assert len(entities) == 3  # 2 room sensors + 1 demand sensor
+    assert len(flap) == 1
+    assert len(entities) == 4  # 2 room sensors + demand debug + flap sensor
 
 
 def test_demand_sensor_ids_fallback_to_short_group_id():
@@ -224,3 +227,21 @@ def test_demand_sensor_no_data():
     s = RoomMindDemandDebugSensor(_make_coordinator(), "gid-1", "grp")
     assert s.native_value is None
     assert s.extra_state_attributes == {}
+
+
+def test_flap_sensor_value_and_ids():
+    """Flap sensor exposes the rolling 1 h change count; uid stays exempt."""
+    debug = {"gid-1": {"flaps_1h": 7}}
+    s = RoomMindDemandFlapSensor(_make_coordinator(demand_debug=debug), "gid-1", "Außengerät EG")
+    assert s.native_value == 7
+    assert s.entity_id == f"sensor.{DOMAIN}_demand_aussengerat_eg_flaps"
+    # Must keep the roommind_demand_ prefix so the orphan sweep exempts it.
+    assert s.unique_id == f"{DOMAIN}_demand_gid-1_flaps"
+    assert s.unique_id.startswith(f"{DOMAIN}_demand_")
+
+
+def test_flap_sensor_no_data():
+    """No demand_debug / no flaps_1h key yet → None."""
+    assert RoomMindDemandFlapSensor(_make_coordinator(), "gid-1", "grp").native_value is None
+    debug = {"gid-1": {"target": 30}}  # entry exists but no flaps_1h
+    assert RoomMindDemandFlapSensor(_make_coordinator(demand_debug=debug), "gid-1", "g").native_value is None
