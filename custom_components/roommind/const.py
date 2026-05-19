@@ -103,12 +103,11 @@ DEFAULT_DEMAND_MIN_HOLD_MINUTES = 10  # min between demand changes (anti-thrash)
 DEFAULT_DEMAND_DOWN_HOLD_MINUTES = 5
 # Σδ (summed sign-normalised zone error) at/below this counts as "active zones
 # satisfied" — matches the trim's neutral band so a decrease is only released
-# once the trim itself wants neutral.
+# once the trim itself wants neutral. This is the *sole* down-release gate:
+# heating_power (= MPC power_fraction × 100) is bang-bang ≈100 whenever the
+# zone heats at all (the very RCA defect), so it is logged for telemetry but
+# deliberately NOT used as a gate — it would pin the cap high until full idle.
 DEMAND_DOWN_SETTLED_DELTA = 0.3
-# Mean active-member heating_power (%, = MPC power_fraction × 100) at/below
-# this counts as "compressor genuinely low" — second gate for a step-down so
-# we don't drop the cap while the unit is still modulating hard.
-DEMAND_DOWN_MAX_HEATING_POWER = 25.0
 DEMAND_GRID_STEP = 5  # device demand select granularity (%)
 # Outdoor-temp feedforward: heat pumps lose capacity when cold → need a higher
 # compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,

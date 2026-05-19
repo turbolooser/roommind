@@ -36,7 +36,6 @@ from .const import (
     DEFAULT_OUTDOOR_HEATING_MAX,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
-    DEMAND_DOWN_MAX_HEATING_POWER,
     DEMAND_DOWN_SETTLED_DELTA,
     DOMAIN,
     HEATING_BOOST_TARGET,
@@ -1973,13 +1972,16 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             # Faikin retain — the MQTT command→echo roundtrip just strips the
             # HA context so the logbook looked source-less). Raise immediately
             # to cover heat need, but only step *down* once the active zones
-            # have stayed satisfied (Σδ neutral AND compressor genuinely low)
-            # for the configured hold — so the governing *sustained* demand is
-            # what gets sent, not the instantaneous error.
+            # have stayed satisfied (Σδ in the trim's neutral band) for the
+            # configured hold — so the governing *sustained* demand is what
+            # gets sent, not the instantaneous error. mean_hp is logged for
+            # telemetry but NOT a gate: it is MPC power_fraction, bang-bang
+            # ≈100 while heating (the RCA defect), so gating on it would pin
+            # the cap high until full idle. Σδ-sustained is the sole gate.
             down_hold_s = float(settings.get("demand_down_hold_minutes", DEFAULT_DEMAND_DOWN_HOLD_MINUTES)) * 60.0
             slew_reason = "none"
             if prev_target is not None and raw_target < prev_target and down_hold_s > 0.0:
-                settled = result.total_delta <= DEMAND_DOWN_SETTLED_DELTA and mean_hp <= DEMAND_DOWN_MAX_HEATING_POWER
+                settled = result.total_delta <= DEMAND_DOWN_SETTLED_DELTA
                 if settled:
                     start = self._group_demand_downhold.setdefault(gid, now)
                     if now - start >= down_hold_s:
