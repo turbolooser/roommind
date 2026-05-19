@@ -1918,7 +1918,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
 
         for gid, group in self._compressor_manager.get_groups().items():
             member_set = set(group.members)
-            active_pfs: list[float] = []
+            active_deltas: list[float] = []
             for area_id, room in rooms_config.items():
                 if not room.get("climate_control_enabled", True):
                     continue
@@ -1928,27 +1928,55 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 rs = room_states.get(area_id)
                 if not rs:
                     continue
-                if rs.get("commanded_mode", rs.get("mode", MODE_IDLE)) == MODE_IDLE:
+                mode = rs.get("commanded_mode", rs.get("mode", MODE_IDLE))
+                if mode == MODE_IDLE:
                     continue
-                active_pfs.append(max(0.0, min(1.0, rs.get("heating_power", 0) / 100.0)))
+                tgt = rs.get("target_temp")
+                cur = rs.get("current_temp")
+                if tgt is None or cur is None:
+                    continue
+                # Sign-normalised effort error: positive = zone still needs
+                # work. Heating wants temp up (tgt-cur); cooling wants it
+                # down (cur-tgt). Lets the symmetric trim band work in both.
+                if mode == MODE_COOLING:
+                    active_deltas.append(float(cur) - float(tgt))
+                else:
+                    active_deltas.append(float(tgt) - float(cur))
 
             result = compute_demand(
                 self.outdoor_temp_effective,
-                active_pfs,
+                active_deltas,
                 demand_min,
                 demand_max,
             )
             target = result.percent
 
+            # Self-correcting hold gate: decide against the *actual* device
+            # state, not RoomMind's last intent. Comparing target vs the
+            # remembered intent froze the controller forever once they
+            # converged — so a select that drifted away on its own (e.g.
+            # Faikin retaining 50 after an MQTT reconnect) was never
+            # corrected. The worst (most off-target) configured select
+            # drives the decision so any drifted member forces a rewrite.
+            device_val: int | None = None
+            for eid in select_entities:
+                st = self.hass.states.get(eid)
+                if st is None:
+                    continue
+                try:
+                    v = int(float(st.state))
+                except (TypeError, ValueError):
+                    continue
+                if device_val is None or abs(v - target) > abs(device_val - target):
+                    device_val = v
+
             prev = self._group_demand_state.get(gid)
             now = time.monotonic()
             held_reason = "applied"
-            if prev is not None:
-                prev_val, prev_ts = prev
-                if abs(target - prev_val) < hysteresis:
-                    held_reason = "hysteresis"  # within band — hold
-                elif now - prev_ts < min_hold_s:
-                    held_reason = "min_hold"  # min-hold not elapsed — anti-thrash
+            if device_val is not None and abs(target - device_val) < hysteresis:
+                held_reason = "hysteresis"  # device already within band — no write
+            elif prev is not None and now - prev[1] < min_hold_s:
+                held_reason = "min_hold"  # changed too recently — anti-short-cycle
 
             # Flight recorder: always record the controller's intent +
             # diagnostics (even when held), so offline analysis can separate
@@ -1958,10 +1986,10 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 "target": target,
                 "held_reason": held_reason,
                 "applied": False,
+                "device": device_val,
                 "base": result.base,
-                "fb": round(result.fb, 4),
-                "fb_mean": round(result.fb_mean, 4),
-                "fb_max": round(result.fb_max, 4),
+                "adjustment": result.adjustment,
+                "total_delta": round(result.total_delta, 3),
                 "n_active": result.n_active,
                 "raw": round(result.raw, 2),
                 "outdoor": self.outdoor_temp_effective,
