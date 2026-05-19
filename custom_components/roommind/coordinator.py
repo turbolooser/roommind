@@ -2103,8 +2103,11 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             held_reason = "applied"
             if device_val is not None and abs(target - device_val) < hysteresis:
                 held_reason = "hysteresis"  # device already within band — no write
-            elif prev is not None and now - prev[1] < min_hold_s:
-                held_reason = "min_hold"  # changed too recently — anti-short-cycle
+            elif prev is not None and target != prev[0] and now - prev[1] < min_hold_s:
+                # Anti-short-cycle applies only to a *genuine demand change*.
+                # Re-asserting an unchanged target after the device drifted
+                # away on its own is not a short-cycle → correct immediately.
+                held_reason = "min_hold"
 
             # Flight recorder: always record the controller's intent +
             # diagnostics (even when held), so offline analysis can separate
