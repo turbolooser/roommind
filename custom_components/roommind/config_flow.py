@@ -26,6 +26,12 @@ from .const import (
     DEFAULT_DEMAND_MIN,
     DEFAULT_DEMAND_MIN_HOLD_MINUTES,
     DEFAULT_IDLE_OFF_AFTER_MINUTES,
+    DEFAULT_PV_BATTERY_SOC_MIN,
+    DEFAULT_PV_BOOST_COOL_PERCENT,
+    DEFAULT_PV_BOOST_ENABLED,
+    DEFAULT_PV_BOOST_HEAT_PERCENT,
+    DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES,
+    DEFAULT_PV_SURPLUS_MIN_W,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
     DOMAIN,
@@ -85,6 +91,14 @@ class RoomMindOptionsFlow(OptionsFlow):
                         "demand_hysteresis": user_input["demand_hysteresis"],
                         "demand_min_hold_minutes": user_input["demand_min_hold_minutes"],
                         "demand_down_hold_minutes": user_input["demand_down_hold_minutes"],
+                        "pv_boost_enabled": user_input["pv_boost_enabled"],
+                        "pv_surplus_sensor": user_input.get("pv_surplus_sensor", ""),
+                        "pv_surplus_min_w": user_input["pv_surplus_min_w"],
+                        "pv_surplus_min_duration_minutes": user_input["pv_surplus_min_duration_minutes"],
+                        "pv_battery_soc_sensor": user_input.get("pv_battery_soc_sensor", ""),
+                        "pv_battery_soc_min": user_input["pv_battery_soc_min"],
+                        "pv_boost_cool_percent": user_input["pv_boost_cool_percent"],
+                        "pv_boost_heat_percent": user_input["pv_boost_heat_percent"],
                     }
                 )
             return self.async_create_entry(title="", data={})
@@ -104,6 +118,16 @@ class RoomMindOptionsFlow(OptionsFlow):
         current_demand_hyst = settings.get("demand_hysteresis", DEFAULT_DEMAND_HYSTERESIS)
         current_demand_hold = settings.get("demand_min_hold_minutes", DEFAULT_DEMAND_MIN_HOLD_MINUTES)
         current_demand_down_hold = settings.get("demand_down_hold_minutes", DEFAULT_DEMAND_DOWN_HOLD_MINUTES)
+        current_pv_boost_enabled = settings.get("pv_boost_enabled", DEFAULT_PV_BOOST_ENABLED)
+        current_pv_surplus_sensor = settings.get("pv_surplus_sensor", "")
+        current_pv_surplus_min_w = settings.get("pv_surplus_min_w", DEFAULT_PV_SURPLUS_MIN_W)
+        current_pv_surplus_min_duration = settings.get(
+            "pv_surplus_min_duration_minutes", DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES
+        )
+        current_pv_soc_sensor = settings.get("pv_battery_soc_sensor", "")
+        current_pv_soc_min = settings.get("pv_battery_soc_min", DEFAULT_PV_BATTERY_SOC_MIN)
+        current_pv_boost_cool = settings.get("pv_boost_cool_percent", DEFAULT_PV_BOOST_COOL_PERCENT)
+        current_pv_boost_heat = settings.get("pv_boost_heat_percent", DEFAULT_PV_BOOST_HEAT_PERCENT)
 
         offset_selector = selector.NumberSelector(
             selector.NumberSelectorConfig(
@@ -187,6 +211,40 @@ class RoomMindOptionsFlow(OptionsFlow):
                 vol.Required("demand_down_hold_minutes", default=current_demand_down_hold): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=60, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required("pv_boost_enabled", default=current_pv_boost_enabled): selector.BooleanSelector(),
+                vol.Optional("pv_surplus_sensor", default=current_pv_surplus_sensor): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Required("pv_surplus_min_w", default=current_pv_surplus_min_w): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=20000, step=100, unit_of_measurement="W", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required(
+                    "pv_surplus_min_duration_minutes", default=current_pv_surplus_min_duration
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=240, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional("pv_battery_soc_sensor", default=current_pv_soc_sensor): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Required("pv_battery_soc_min", default=current_pv_soc_min): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required("pv_boost_cool_percent", default=current_pv_boost_cool): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=50, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Required("pv_boost_heat_percent", default=current_pv_boost_heat): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=50, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
                     )
                 ),
             }
