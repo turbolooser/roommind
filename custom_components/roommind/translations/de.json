@@ -29,7 +29,15 @@
           "demand_max": "Max. Demand (%)",
           "demand_hysteresis": "Demand-Hysterese (%)",
           "demand_min_hold_minutes": "Mindest-Haltezeit zwischen Demand-Änderungen (Min.)",
-          "demand_down_hold_minutes": "Haltezeit vor Demand-Absenkung (Min.)"
+          "demand_down_hold_minutes": "Haltezeit vor Demand-Absenkung (Min.)",
+          "pv_boost_enabled": "PV-Überschuss-Boost",
+          "pv_surplus_sensor": "PV-Überschuss-Sensor (W, positiv = Überschuss)",
+          "pv_surplus_min_w": "Min. Überschuss für Boost (W)",
+          "pv_surplus_min_duration_minutes": "Anhaltend für (Min.)",
+          "pv_battery_soc_sensor": "Batterie-Ladestand-Sensor (%, optional)",
+          "pv_battery_soc_min": "Min. Batterie-SoC für Boost (%)",
+          "pv_boost_cool_percent": "Boost im Kühlbetrieb (%-Punkte)",
+          "pv_boost_heat_percent": "Boost im Heizbetrieb (%-Punkte)"
         },
         "data_description": {
           "vacation_action": "\"Absenkung\" heizt auf die Urlaubstemperatur. \"Aus\" deaktiviert aktives Heizen (nur Frostschutz); Kühlen folgt weiter Eco-Kühlen.",
@@ -45,7 +53,15 @@
           "demand_max": "Höchster Demand-Cap, den RoomMind setzt.",
           "demand_hysteresis": "Demand-Änderungen kleiner als dies nicht erneut anwenden (Anti-Flattern).",
           "demand_min_hold_minutes": "Mindestzeit zwischen Demand-Änderungen (Anti-Takten des Caps).",
-          "demand_down_hold_minutes": "Anti-Ping-Pong: Demand-Cap erst absenken, wenn die Räume so lange durchgehend zufrieden waren. Demand steigt weiterhin sofort, um Wärmebedarf zu decken. 0 = aus (Legacy)."
+          "demand_down_hold_minutes": "Anti-Ping-Pong: Demand-Cap erst absenken, wenn die Räume so lange durchgehend zufrieden waren. Demand steigt weiterhin sofort, um Wärmebedarf zu decken. 0 = aus (Legacy).",
+          "pv_boost_enabled": "Wenn das Haus PV-Überschuss erzeugt, der sonst eingespeist würde, den Demand-Cap anheben, damit die Klimaanlage den Überschuss in die thermische Masse parken kann. Aus = kein Effekt.",
+          "pv_surplus_sensor": "Ein Sensor (Watt), den du in HA selbst baust — positive Werte = einspeisbarer Überschuss. Übliches Rezept: Vorzeichen des Netz-Sensors umdrehen, oder PV − Hausverbrauch. Leer = Boost aus.",
+          "pv_surplus_min_w": "Überschuss muss diesen Wert überschreiten, damit der Boost greift.",
+          "pv_surplus_min_duration_minutes": "Anhaltend so lange erfüllt, bevor der Boost greift (Anti-Flap). Wegfall greift sofort.",
+          "pv_battery_soc_sensor": "Optional. Wenn gesetzt, greift der Boost erst, wenn die Hausbatterie voll genug ist — der Speicher hat Vorrang.",
+          "pv_battery_soc_min": "Mindest-Ladestand der Hausbatterie, damit der Boost greift. Ignoriert, wenn kein SoC-Sensor gesetzt ist.",
+          "pv_boost_cool_percent": "Demand-%-Punkte, die zusätzlich zum Base + Trim drauf kommen, während die Gruppe aktiv kühlt.",
+          "pv_boost_heat_percent": "Demand-%-Punkte, die zusätzlich zum Base + Trim drauf kommen, während die Gruppe aktiv heizt (sinnvoll in der Übergangszeit)."
         }
       }
     }

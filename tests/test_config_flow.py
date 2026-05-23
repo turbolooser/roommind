@@ -103,6 +103,14 @@ class TestOptionsFlow:
             "demand_hysteresis": 10,
             "demand_min_hold_minutes": 10,
             "demand_down_hold_minutes": 5,
+            "pv_boost_enabled": True,
+            "pv_surplus_sensor": "sensor.pv_surplus",
+            "pv_surplus_min_w": 1500,
+            "pv_surplus_min_duration_minutes": 30,
+            "pv_battery_soc_sensor": "sensor.battery_soc",
+            "pv_battery_soc_min": 90,
+            "pv_boost_cool_percent": 15,
+            "pv_boost_heat_percent": 10,
         }
         result = await flow.async_step_init(user_input)
 
@@ -132,6 +140,14 @@ class TestOptionsFlow:
                 "demand_hysteresis": 10,
                 "demand_min_hold_minutes": 10,
                 "demand_down_hold_minutes": 5,
+                "pv_boost_enabled": False,
+                "pv_surplus_sensor": "",
+                "pv_surplus_min_w": 1500,
+                "pv_surplus_min_duration_minutes": 30,
+                "pv_battery_soc_sensor": "",
+                "pv_battery_soc_min": 90,
+                "pv_boost_cool_percent": 15,
+                "pv_boost_heat_percent": 10,
             }
         )
 
