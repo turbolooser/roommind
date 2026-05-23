@@ -37,9 +37,10 @@ class DemandResult:
     percent: int
     base: int  # weather feedforward demand %
     adjustment: int  # symmetric trim applied to base (±band)
+    pv_boost: int  # extra demand %-points from PV surplus (0 when inactive)
     total_delta: float  # Σ of active members' sign-normalised temp error
     n_active: int  # number of active (non-idle) members
-    raw: float  # base + adjustment, pre-clamp / pre-snap
+    raw: float  # base + adjustment + pv_boost, pre-clamp / pre-snap
 
 
 def _feedforward_base(outdoor_temp: float, curve: Sequence[tuple[float, int]]) -> int:
@@ -82,6 +83,7 @@ def compute_demand(
     demand_min: int,
     demand_max: int,
     *,
+    pv_boost: int = 0,
     curve: Sequence[tuple[float, int]] = DEMAND_FEEDFORWARD_CURVE,
     grid: int = DEMAND_GRID_STEP,
 ) -> DemandResult:
@@ -89,12 +91,18 @@ def compute_demand(
 
     ``active_deltas`` are the sign-normalised temperature errors (positive =
     zone still needs work) of members whose room is currently *not* idle.
-    Empty → group idle → ``demand_min``.
+    Empty → group idle → ``demand_min`` (and ``pv_boost`` is ignored — no
+    point lifting the cap when there is no work to do).
+
+    ``pv_boost`` is an integer number of demand %-points added on top of
+    ``base + adjustment``. The caller is responsible for the gating logic
+    (sustained surplus, battery SoC, mode-appropriate amount) — by the time
+    it reaches here the boost has already earned its right to apply.
 
     The feedforward base is intentionally **not** pre-clamped to
-    ``demand_max``: only the final ``base + adjustment`` sum is clamped, so a
-    cold-weather base above the safety ceiling still trims correctly (matches
-    the legacy controller's single final clamp).
+    ``demand_max``: only the final ``base + adjustment + pv_boost`` sum is
+    clamped, so a cold-weather base above the safety ceiling still trims
+    correctly (matches the legacy controller's single final clamp).
     """
     if demand_max < demand_min:
         demand_max = demand_min
@@ -108,6 +116,7 @@ def compute_demand(
             percent=_snap(float(demand_min), grid, demand_min, demand_max),
             base=base,
             adjustment=0,
+            pv_boost=0,
             total_delta=0.0,
             n_active=0,
             raw=float(demand_min),
@@ -115,11 +124,12 @@ def compute_demand(
 
     total_delta = sum(active_deltas)
     adjustment = _delta_adjustment(total_delta)
-    raw = float(base + adjustment)
+    raw = float(base + adjustment + pv_boost)
     return DemandResult(
         percent=_snap(raw, grid, demand_min, demand_max),
         base=base,
         adjustment=adjustment,
+        pv_boost=pv_boost,
         total_delta=total_delta,
         n_active=len(active_deltas),
         raw=raw,
@@ -132,6 +142,7 @@ def compute_demand_percent(
     demand_min: int,
     demand_max: int,
     *,
+    pv_boost: int = 0,
     curve: Sequence[tuple[float, int]] = DEMAND_FEEDFORWARD_CURVE,
     grid: int = DEMAND_GRID_STEP,
 ) -> int:
@@ -141,6 +152,7 @@ def compute_demand_percent(
         active_deltas,
         demand_min,
         demand_max,
+        pv_boost=pv_boost,
         curve=curve,
         grid=grid,
     ).percent
