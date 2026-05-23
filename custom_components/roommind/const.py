@@ -103,6 +103,22 @@ DEFAULT_DEMAND_DOWN_HOLD_MINUTES = 5
 # deliberately NOT used as a gate — it would pin the cap high until full idle.
 DEMAND_DOWN_SETTLED_DELTA = 0.3
 DEMAND_GRID_STEP = 5  # device demand select granularity (%)
+# PV surplus boost: when the house produces more solar than it consumes and
+# the battery is (nearly) full, lift the demand cap so the AC can absorb the
+# overflow into the thermal mass — turning excess kWh that would otherwise
+# go to the grid into a few extra degrees of cooling head-room (or heating
+# in shoulder season). Disabled by default → byte-identical to upstream.
+# All thresholds are global (one PV plant per home is the realistic case);
+# the user feeds in a single ``pv_surplus_sensor`` (W, positive = surplus)
+# built however they like in HA, so any inverter / grid-meter / evcc / etc.
+# can drive it. Optional ``pv_battery_soc_sensor`` (%) gates the boost so
+# we don't steal charge from the home battery.
+DEFAULT_PV_BOOST_ENABLED = False
+DEFAULT_PV_SURPLUS_MIN_W = 1500  # W of sustained surplus required
+DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES = 30  # for this long → anti-flap
+DEFAULT_PV_BATTERY_SOC_MIN = 90  # %; only checked when SoC sensor is set
+DEFAULT_PV_BOOST_COOL_PERCENT = 15  # %-points added to demand while cooling
+DEFAULT_PV_BOOST_HEAT_PERCENT = 10  # %-points added to demand while heating
 # Outdoor-temp feedforward: heat pumps lose capacity when cold → need a higher
 # compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,
 # evaluated highest-first. Mirrors the field-tuned legacy curve.
