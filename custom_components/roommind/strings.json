@@ -26,7 +26,15 @@
           "demand_max": "Max demand (%)",
           "demand_hysteresis": "Demand hysteresis (%)",
           "demand_min_hold_minutes": "Min hold between demand changes (min)",
-          "demand_down_hold_minutes": "Demand step-down hold (min)"
+          "demand_down_hold_minutes": "Demand step-down hold (min)",
+          "pv_boost_enabled": "PV surplus boost",
+          "pv_surplus_sensor": "PV surplus sensor (W, positive = surplus)",
+          "pv_surplus_min_w": "Min surplus to boost (W)",
+          "pv_surplus_min_duration_minutes": "Sustained for (min)",
+          "pv_battery_soc_sensor": "Battery state-of-charge sensor (%, optional)",
+          "pv_battery_soc_min": "Min battery SoC to boost (%)",
+          "pv_boost_cool_percent": "Boost while cooling (%-points)",
+          "pv_boost_heat_percent": "Boost while heating (%-points)"
         },
         "data_description": {
           "vacation_action": "\"Setback\" heats to the vacation temperature. \"Off\" disables active heating (frost protection only); cooling continues to track eco cool.",
@@ -39,7 +47,15 @@
           "demand_max": "Highest demand cap RoomMind will set.",
           "demand_hysteresis": "Don't re-apply demand changes smaller than this (anti-flutter).",
           "demand_min_hold_minutes": "Minimum time between demand changes (anti short-cycle of the cap).",
-          "demand_down_hold_minutes": "Anti ping-pong: only lower the demand cap after the rooms have stayed satisfied this long. Demand still rises immediately to cover heat need. 0 = off (legacy)."
+          "demand_down_hold_minutes": "Anti ping-pong: only lower the demand cap after the rooms have stayed satisfied this long. Demand still rises immediately to cover heat need. 0 = off (legacy).",
+          "pv_boost_enabled": "When the home produces surplus solar that would otherwise be exported, lift the demand cap so the AC can park the excess in thermal mass. Off = no effect.",
+          "pv_surplus_sensor": "A sensor (Watts) that you build in HA — positive values mean exportable surplus. Typical recipe: invert the grid-meter sign, or PV − house load. Empty = boost off.",
+          "pv_surplus_min_w": "Surplus must exceed this for the boost to engage.",
+          "pv_surplus_min_duration_minutes": "Sustained-on duration before boost fires (anti-flap). Drop-off is immediate.",
+          "pv_battery_soc_sensor": "Optional. When set, boost only fires once the home battery is full enough — keeps charge priority on the battery first.",
+          "pv_battery_soc_min": "Minimum battery state-of-charge for boost to engage. Ignored when no SoC sensor is set.",
+          "pv_boost_cool_percent": "Demand %-points added on top of base + trim while the group is actively cooling.",
+          "pv_boost_heat_percent": "Demand %-points added on top of base + trim while the group is actively heating (useful in shoulder season)."
         }
       }
     }
