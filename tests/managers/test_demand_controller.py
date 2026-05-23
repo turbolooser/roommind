@@ -138,3 +138,36 @@ def test_cooling_sign_is_caller_supplied():
     exactly like a heating room 1 K too cold.
     """
     assert compute_demand_percent(10.0, [1.0], 30, 95) == 50
+
+
+def test_pv_boost_added_on_top_of_base_and_trim():
+    """pv_boost stacks with base + trim, then clamps to demand_max."""
+    # Mild weather (base 35), zone at target (no trim), boost +15 → 50.
+    res = compute_demand(10.0, [0.0], 30, 95, pv_boost=15)
+    assert res.base == 35
+    assert res.adjustment == 0
+    assert res.pv_boost == 15
+    assert res.raw == pytest.approx(50.0)
+    assert res.percent == 50
+
+
+def test_pv_boost_clamps_to_demand_max():
+    """Boost cannot exceed the safety ceiling — final clamp still rules."""
+    # base 35 + adj 25 + boost 30 = 90, but demand_max=70 caps it.
+    res = compute_demand(10.0, [2.0], 30, 70, pv_boost=30)
+    assert res.raw == pytest.approx(90.0)
+    assert res.percent == 70  # clamped, then snapped
+
+
+def test_pv_boost_ignored_when_group_idle():
+    """No active zones → boost has nowhere to go; result is demand_min."""
+    res = compute_demand(10.0, [], 30, 95, pv_boost=20)
+    assert res.percent == 30
+    assert res.pv_boost == 0  # diagnostics reflect that boost did not apply
+
+
+def test_pv_boost_defaults_to_zero():
+    """compute_demand without pv_boost kwarg stays byte-identical to legacy."""
+    res = compute_demand(10.0, [0.5], 30, 95)
+    assert res.pv_boost == 0
+    assert res.percent == 45  # 35 + 8 → snap 45
