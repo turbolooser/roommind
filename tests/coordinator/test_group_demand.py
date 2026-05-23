@@ -273,3 +273,178 @@ async def test_flap_counter_tracks_applied_changes(hass, mock_config_entry):
     hass.states.get = MagicMock(return_value=_sel_state("60"))
     await c._async_apply_group_demand(_room_states(delta=2.0), _rooms(), s)
     assert c._demand_debug[GID]["flaps_1h"] == 1
+
+
+# --- PV-surplus boost --------------------------------------------------------
+
+PV_SENSOR = "sensor.pv_surplus"
+SOC_SENSOR = "sensor.battery_soc"
+
+_PV_BASE = {
+    "demand_control_enabled": True,
+    "demand_select_entities": [SEL],
+    "demand_min": 30,
+    "demand_max": 95,
+    "demand_hysteresis": 10,
+    "demand_min_hold_minutes": 0,
+    "demand_down_hold_minutes": 0,
+    "pv_boost_enabled": True,
+    "pv_surplus_sensor": PV_SENSOR,
+    "pv_surplus_min_w": 1500,
+    "pv_surplus_min_duration_minutes": 30,
+    "pv_battery_soc_sensor": SOC_SENSOR,
+    "pv_battery_soc_min": 90,
+    "pv_boost_cool_percent": 15,
+    "pv_boost_heat_percent": 10,
+}
+
+
+def _state_router(states: dict[str, str | None]):
+    """Build a hass.states.get side_effect that routes by entity_id."""
+
+    def _get(eid: str):
+        if eid not in states:
+            return None
+        val = states[eid]
+        if val is None:
+            return None
+        return _sel_state(val)
+
+    return _get
+
+
+def _cool_room_states(delta_pos: float = 0.0):
+    """Cooling-mode room_states: positive ``delta_pos`` = room above target.
+
+    The coordinator sign-normalises cooling errors as ``cur - tgt``, so
+    setting ``current=20, target=20 - delta_pos`` lands the same positive
+    Σδ in the trim band that a heating room reaches with ``tgt > cur``.
+    Lets the boost tests exercise the cooling branch without inverting
+    the trim semantics.
+    """
+    return {
+        "r1": {
+            "commanded_mode": "cooling",
+            "current_temp": 20.0,
+            "target_temp": 20.0 - delta_pos,
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_disabled_no_effect(hass, mock_config_entry):
+    """pv_boost_enabled=False → byte-identical to the legacy controller."""
+    s = dict(_PV_BASE, pv_boost_enabled=False)
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), s)
+    # Σδ 1.0 → trim +15 → 35+15=50. No boost on top.
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "50"
+    assert c._demand_debug[GID]["pv_boost"] == 0
+    assert c._demand_debug[GID]["pv_reason"] == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_warming_up_then_engages_cooling(hass, mock_config_entry):
+    """First cycle starts the timer (boost=0); after duration elapsed → cool_percent."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    # Cycle 1: conditions met but warming up → no boost yet.
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 0
+    assert c._demand_debug[GID]["pv_reason"] == "warming_up"
+    assert GID in c._group_pv_boost_since  # timer running
+
+    # Force the timer to look elapsed → boost engages with cool_percent.
+    c._group_pv_boost_since[GID] = time.monotonic() - (30 * 60 + 1)
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 15
+    assert c._demand_debug[GID]["pv_reason"] == "cool"
+    # base 35 + boost 15 = 50.
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "50"
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_heat_amount_separate(hass, mock_config_entry):
+    """Heating mode uses pv_boost_heat_percent (not cool_percent)."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600  # already armed
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 10  # heat percent
+    assert c._demand_debug[GID]["pv_reason"] == "heat"
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_surplus_drop_resets_immediately(hass, mock_config_entry):
+    """Surplus below threshold → boost off *and* timer reset (no carry-over)."""
+    c = _setup(hass, mock_config_entry, sel_current="50")
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600  # was armed long ago
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "50", PV_SENSOR: "200", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 0
+    assert c._demand_debug[GID]["pv_reason"] == "surplus_low"
+    assert GID not in c._group_pv_boost_since
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_soc_gate_blocks(hass, mock_config_entry):
+    """SoC below min while surplus is plenty → boost stays off."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "70"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 0
+    assert c._demand_debug[GID]["pv_reason"] == "soc_low"
+    assert GID not in c._group_pv_boost_since
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_no_soc_sensor_skips_soc_check(hass, mock_config_entry):
+    """Empty SoC sensor → boost engages on surplus alone (no battery in system)."""
+    s = dict(_PV_BASE, pv_battery_soc_sensor="")
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), s)
+    assert c._demand_debug[GID]["pv_boost"] == 15
+    assert c._demand_debug[GID]["pv_reason"] == "cool"
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_idle_group_no_boost(hass, mock_config_entry):
+    """No active zone → boost short-circuits to 0 (nothing to boost)."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_room_states(mode="idle"), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 0
+    assert c._demand_debug[GID]["pv_reason"] == "no_active"
+    assert GID not in c._group_pv_boost_since  # reset when idle
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_invalid_sensor_state(hass, mock_config_entry):
+    """Surplus sensor unavailable/non-numeric → boost off, no crash."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "unavailable", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 0
+    assert c._demand_debug[GID]["pv_reason"] == "sensor_invalid"
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_clamps_to_demand_max(hass, mock_config_entry):
+    """Boost cannot lift the cap past demand_max (safety ceiling holds)."""
+    s = dict(_PV_BASE, demand_max=70)
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    # delta=2.0 → trim +25, plus boost +15 → raw 75 → clamp 70.
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=2.0), _rooms(), s)
+    calls = _demand_calls(hass)
+    assert calls and calls[0][0][2]["option"] == "70"
+    assert c._demand_debug[GID]["pv_boost"] == 15
