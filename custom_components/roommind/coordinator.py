@@ -34,6 +34,12 @@ from .const import (
     DEFAULT_ECO_HEAT,
     DEFAULT_IDLE_OFF_AFTER_MINUTES,
     DEFAULT_OUTDOOR_HEATING_MAX,
+    DEFAULT_PV_BATTERY_SOC_MIN,
+    DEFAULT_PV_BOOST_COOL_PERCENT,
+    DEFAULT_PV_BOOST_ENABLED,
+    DEFAULT_PV_BOOST_HEAT_PERCENT,
+    DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES,
+    DEFAULT_PV_SURPLUS_MIN_W,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
     DEMAND_DOWN_SETTLED_DELTA,
@@ -166,6 +172,11 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         # gid -> monotonic timestamps of applied demand *changes*, pruned to a
         # rolling 1 h window → feeds the flapping diagnostic sensor.
         self._group_demand_changes: dict[str, list[float]] = {}
+        # gid -> monotonic ts since which the PV surplus + battery-SoC
+        # conditions have been *continuously* satisfied. Powers the
+        # "sustained for N minutes" anti-flap gate of the PV boost; reset to
+        # None on any miss → boost only fires after the full duration.
+        self._group_pv_boost_since: dict[str, float] = {}
         # Per-group demand "flight recorder": last computed intent +
         # diagnostics, surfaced via a recorded sensor for offline analysis.
         self._demand_debug: dict[str, dict] = {}
@@ -1891,6 +1902,88 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 exc_info=True,
             )
 
+    def _compute_pv_boost(
+        self,
+        gid: str,
+        mode_active: str | None,
+        settings: dict,
+        now: float,
+    ) -> tuple[int, str]:
+        """Resolve the PV-surplus boost (%-points) for one compressor group.
+
+        Returns ``(boost, reason)`` where ``boost`` is the %-points to add on
+        top of base + adjustment in ``compute_demand``. ``reason`` is a short
+        tag for the diagnostic sensor / logs:
+
+        - ``disabled``      — pv_boost_enabled off, or no surplus sensor set
+        - ``no_active``     — group has no active heating/cooling zone
+        - ``surplus_low``   — surplus_w below threshold
+        - ``soc_low``       — battery SoC below threshold
+        - ``sensor_invalid``— surplus / SoC sensor missing or non-numeric
+        - ``warming_up``    — gate satisfied but sustained-duration not yet met
+        - ``cool`` / ``heat`` — boost active for the named mode
+
+        Rise gate is gated by *sustained* duration (anti-flap). Fall is
+        immediate: any miss resets the timer so the very next miss tick
+        already returns zero. Matches the down-only flap protection of the
+        wider demand controller — we never want to clamp the cap *higher*
+        than reality based on a stale "things looked sunny 30 min ago".
+        """
+        if not settings.get("pv_boost_enabled", DEFAULT_PV_BOOST_ENABLED):
+            self._group_pv_boost_since.pop(gid, None)
+            return 0, "disabled"
+
+        surplus_eid = settings.get("pv_surplus_sensor")
+        if not surplus_eid:
+            self._group_pv_boost_since.pop(gid, None)
+            return 0, "disabled"
+
+        # No active zone → no work to boost; reset timer so the next active
+        # cycle starts fresh (we don't reward "sat in idle through the sun").
+        if mode_active is None:
+            self._group_pv_boost_since.pop(gid, None)
+            return 0, "no_active"
+
+        surplus_state = self.hass.states.get(surplus_eid)
+        try:
+            surplus_w = float(surplus_state.state) if surplus_state else float("nan")
+        except (TypeError, ValueError):
+            surplus_w = float("nan")
+        if surplus_w != surplus_w:  # NaN check
+            self._group_pv_boost_since.pop(gid, None)
+            return 0, "sensor_invalid"
+
+        min_w = float(settings.get("pv_surplus_min_w", DEFAULT_PV_SURPLUS_MIN_W))
+        if surplus_w < min_w:
+            self._group_pv_boost_since.pop(gid, None)
+            return 0, "surplus_low"
+
+        soc_eid = settings.get("pv_battery_soc_sensor")
+        if soc_eid:
+            soc_state = self.hass.states.get(soc_eid)
+            try:
+                soc = float(soc_state.state) if soc_state else float("nan")
+            except (TypeError, ValueError):
+                soc = float("nan")
+            if soc != soc:
+                self._group_pv_boost_since.pop(gid, None)
+                return 0, "sensor_invalid"
+            soc_min = float(settings.get("pv_battery_soc_min", DEFAULT_PV_BATTERY_SOC_MIN))
+            if soc < soc_min:
+                self._group_pv_boost_since.pop(gid, None)
+                return 0, "soc_low"
+
+        duration_s = (
+            float(settings.get("pv_surplus_min_duration_minutes", DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES)) * 60.0
+        )
+        start = self._group_pv_boost_since.setdefault(gid, now)
+        if now - start < duration_s:
+            return 0, "warming_up"
+
+        if mode_active == MODE_COOLING:
+            return int(settings.get("pv_boost_cool_percent", DEFAULT_PV_BOOST_COOL_PERCENT)), "cool"
+        return int(settings.get("pv_boost_heat_percent", DEFAULT_PV_BOOST_HEAT_PERCENT)), "heat"
+
     async def _async_apply_group_demand(
         self,
         room_states: dict[str, dict],
@@ -1922,6 +2015,8 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             active_deltas: list[float] = []
             active_hp: list[float] = []
             zone_dbg: list[tuple[str, float]] = []
+            cooling_active = False
+            heating_active = False
             for area_id, room in rooms_config.items():
                 if not room.get("climate_control_enabled", True):
                     continue
@@ -1943,23 +2038,38 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 # down (cur-tgt). Lets the symmetric trim band work in both.
                 if mode == MODE_COOLING:
                     delta = float(cur) - float(tgt)
+                    cooling_active = True
                 else:
                     delta = float(tgt) - float(cur)
+                    heating_active = True
                 active_deltas.append(delta)
                 hp = rs.get("heating_power")
                 if isinstance(hp, (int, float)):
                     active_hp.append(float(hp))
                 zone_dbg.append((area_id, round(delta, 2)))
 
+            now = time.monotonic()
+            # Single-compressor multisplits can only run one mode at a time,
+            # so cooling_active wins ties — also matches the summer-context
+            # this feature is built for. group_mode=None when fully idle, so
+            # the PV gate short-circuits and the timer is reset.
+            if cooling_active:
+                group_mode: str | None = MODE_COOLING
+            elif heating_active:
+                group_mode = MODE_HEATING
+            else:
+                group_mode = None
+            pv_boost, pv_reason = self._compute_pv_boost(gid, group_mode, settings, now)
+
             result = compute_demand(
                 self.outdoor_temp_effective,
                 active_deltas,
                 demand_min,
                 demand_max,
+                pv_boost=pv_boost,
             )
             raw_target = result.percent
 
-            now = time.monotonic()
             prev = self._group_demand_state.get(gid)
             prev_target = prev[0] if prev is not None else None
             mean_hp = sum(active_hp) / len(active_hp) if active_hp else 0.0
@@ -2035,6 +2145,8 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 "device": device_val,
                 "base": result.base,
                 "adjustment": result.adjustment,
+                "pv_boost": result.pv_boost,
+                "pv_reason": pv_reason,
                 "total_delta": round(result.total_delta, 3),
                 "n_active": result.n_active,
                 "raw": round(result.raw, 2),
@@ -2089,12 +2201,14 @@ class RoomMindCoordinator(DataUpdateCoordinator):
 
             _LOGGER.log(
                 logging.INFO if changed else logging.DEBUG,
-                "demand grp=%s out=%s base=%d adj=%+d sd=%.2f n=%d hp=%.0f "
+                "demand grp=%s out=%s base=%d adj=%+d pv=%+d(%s) sd=%.2f n=%d hp=%.0f "
                 "z=%s raw=%d tgt=%d dev=%s held=%s slew=%s appl=%s flaps1h=%d",
                 group.name or gid,
                 self.outdoor_temp_effective,
                 result.base,
                 result.adjustment,
+                result.pv_boost,
+                pv_reason,
                 result.total_delta,
                 result.n_active,
                 mean_hp,
