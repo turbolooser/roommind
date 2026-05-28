@@ -191,6 +191,7 @@
   "devices.idle_action_low": "Niedriger Sollwert (wach halten)",
   "devices.idle_action_low_hint": "Senkt den Sollwert auf das Geräteminimum ab, statt auszuschalten. Verhindert, dass TRVs, die im Aus-Modus in Tiefschlaf gehen, spätere Befehle verlieren.",
   "devices.idle_fan_mode": "Lüftergeschwindigkeit",
+  "devices.idle_fan_mode_keep": "Nicht ändern",
   "devices.setpoint_mode": "Sollwert-Modus",
   "devices.setpoint_mode_proportional": "Proportional (Ventilsteuerung)",
   "devices.setpoint_mode_direct": "Direkt (Gerät regelt selbst)",
