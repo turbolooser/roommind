@@ -6,7 +6,11 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- HA runtime APIs are untyped */
 export const loadHaElements = async (): Promise<void> => {
-  if (customElements.get("ha-entity-picker")) return;
+  // Require BOTH elements: on HA 2026.5+ ha-textfield was removed and is only
+  // provided by the Step 2b polyfill below. Returning early on ha-entity-picker
+  // alone skips that registration whenever HA happens to have loaded the picker
+  // first, leaving every <ha-textfield> input invisible until a reload.
+  if (customElements.get("ha-entity-picker") && customElements.get("ha-textfield")) return;
 
   // Step 1: Load base HA components via partial-panel-resolver.
   // Guard on ha-selector (not ha-card) because ha-card can be defined by
