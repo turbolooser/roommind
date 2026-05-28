@@ -265,7 +265,12 @@ async def read_schedule_blocks(
         )
         return cached
 
-    _LOGGER.warning(
+    # Init-Race: schedule integration registers services later than RM startup.
+    # In that case the service raises ServiceNotFound; the fallback to
+    # comfort/eco is harmless, so don't spam warning on every restart.
+    is_init_race = type(error).__name__ == "ServiceNotFound"
+    log = _LOGGER.debug if is_init_race else _LOGGER.warning
+    log(
         "schedule.get_schedule unavailable for %s and no cached blocks; "
         "target will fall back to comfort/eco (error=%r)",
         schedule_entity_id,
