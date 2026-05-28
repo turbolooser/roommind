@@ -1,142 +1,109 @@
-# RoomMind
+# RoomMind — turbolooser fork
 
-[![HACS Default](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.2%2B-blue.svg)](https://www.home-assistant.io/)
-[![License](https://img.shields.io/github/license/snazzybean/roommind)](https://github.com/snazzybean/roommind/blob/main/LICENSE)
-[![Tests](https://github.com/snazzybean/roommind/actions/workflows/ci.yml/badge.svg)](https://github.com/snazzybean/roommind/actions/workflows/ci.yml)
-![Coverage](https://raw.githubusercontent.com/snazzybean/roommind/python-coverage-comment-action-data/badge.svg)
-[![GitHub Release](https://img.shields.io/github/v/release/snazzybean/roommind)](https://github.com/snazzybean/roommind/releases/latest)
+[![Based on RoomMind](https://img.shields.io/badge/based%20on-snazzybean%2Froommind-orange.svg)](https://github.com/snazzybean/roommind)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.5%2B-blue.svg)](https://www.home-assistant.io/)
+[![License](https://img.shields.io/github/license/turbolooser/roommind)](https://github.com/turbolooser/roommind/blob/main/LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/turbolooser/roommind)](https://github.com/turbolooser/roommind/releases/latest)
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Y8Y31VP2VK)
+**Intelligent room climate control for Home Assistant** — self-learning thermal model, proportional valve control, and a dedicated management panel.
 
-**Intelligent room climate control for Home Assistant** - self-learning thermal model, proportional valve control, and a dedicated management panel.
+This is a personal fork tuned for a **Daikin multisplit** (3 indoor heads on one outdoor compressor, controlled via [Faikin](https://github.com/revk/ESP32-Faikin) over MQTT).
 
-![Dashboard](docs/images/page-dashboard.png)
+---
 
-## Features
+## A big thank-you
 
-- **Self-Learning MPC** - Per-room thermal model (Extended Kalman Filter) that learns your home's heating/cooling behavior over time. Automatic fallback to on/off control while learning.
-- **Proportional Valve Control** - TRVs receive calculated setpoints instead of simple on/off, producing smoother temperature curves with less overshoot.
-- **Solar Gain Awareness** - Estimates solar irradiance from sun position and weather data. The model learns each room's solar response and reduces unnecessary heating.
-- **Multi-Scheduler** - Multiple `schedule.*` entities per room with selector switching via `input_boolean` or `input_number`.
-- **Manual Override** - Boost, eco, or custom temperature with configurable duration and instant UI feedback.
-- **Presence Detection** - Link `person.*`, `device_tracker.*`, `binary_sensor.*`, or `input_boolean.*` entities globally or per room. Eco temperature is used when all assigned persons are away.
-- **Ignore Presence per Room** - Rooms can opt out of presence detection to always follow their schedule.
-- **Vacation Mode** - Global setback temperature with end date for all rooms.
-- **Window/Door Pause** - Pauses climate control when windows or doors are open, with configurable open/close delays.
-- **Mold Risk Detection & Prevention** - Surface humidity estimation using the DIN 4108-2 method. Configurable notifications and automatic temperature raise to prevent mold growth.
-- **Automatic Blind/Cover Shading** - Smart cover deployment based on predicted solar overheating. Includes night close, manual override detection, and cover schedules.
-- **Valve Protection** - Periodic cycling of idle TRV valves to prevent seizing and calcification.
-- **Heat Source Orchestration** - Rooms with both TRVs and ACs automatically route heating demand to the most efficient device based on temperature gap and outdoor conditions.
-- **Compressor Group Protection** - Define groups of climate devices sharing an outdoor compressor. Enforces minimum run and off times to prevent short-cycling.
-- **Fan-only & Setback Idle Modes** - AC and heat pump devices can switch to fan-only or setback mode instead of turning off, keeping air circulation or low-load operation active.
-- **Per-Device Setpoint Mode** - Choose proportional (boost setpoint) or direct (exact target) control per device for optimal results with different hardware.
-- **Separate Heat/Cool Targets** - Independent comfort and eco temperatures for heating and cooling in auto mode, creating a natural dead-band.
-- **Per-Room Climate Toggle** - Disable climate control for individual rooms while keeping other rooms active.
-- **Outdoor Areas** - Mark rooms as outdoor (e.g. balcony) to disable climate control while keeping monitoring.
-- **Analytics Dashboard** - Temperature charts with heating power, solar irradiance, and model predictions over 24h to 90 days.
-- **Mobile Ready** - Responsive layout with HA-native toolbar for the companion app.
-- **Multilingual** - English and German, auto-detected from your HA language setting.
+This project is built entirely on the excellent work of **[snazzybean](https://github.com/snazzybean)** and the original **[RoomMind](https://github.com/snazzybean/roommind)** integration. All the hard parts — the EKF thermal model, the MPC optimizer, the panel, the solar-gain learning — are theirs. Hut ab und vielen Dank für ein wirklich durchdachtes Stück Software. 🙏
 
-## Installation
+This fork only adds a layer of tuning on top, specifically for running several AC heads off a single inverter compressor. It is MIT-licensed, just like the original. If you found your way here, you almost certainly want the upstream project first.
 
-[![Open your Home Assistant instance and open RoomMind inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=snazzybean&repository=roommind&category=integration)
+**→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
-### HACS (Recommended)
+---
 
-1. Open HACS in Home Assistant
-2. Search for "RoomMind" and install
-3. Restart Home Assistant
-4. Go to **Settings > Devices & Services > Add Integration > RoomMind**
+## What this fork adds
 
-### Manual
+Everything from upstream, plus the tunings below. Each is **opt-in or backwards-compatible** — with the new features at their defaults, behaviour is identical to upstream.
 
-1. Copy `custom_components/roommind/` to your `config/custom_components/` directory
-2. Restart Home Assistant
-3. Go to **Settings > Devices & Services > Add Integration > RoomMind**
+## Daikin Multisplit Tunings
 
-## Quick Start
+A multisplit is one outdoor compressor feeding several indoor units. That creates problems a per-room controller normally ignores: short-cycling the shared compressor, heads fighting over heat-vs-cool, and an inverter that throttles itself behind its own deadband. These tunings address exactly that.
 
-After installation, RoomMind appears as a panel in the HA sidebar.
+### 1. Compressor-group protection
+Define a group of `climate.*` devices that share one outdoor unit. The group enforces anti-short-cycle timing and mode coherence.
 
-1. **Open RoomMind** from the sidebar - you'll see all your HA areas as room cards
-2. **Click a room card** to open the detail view
-3. **Add devices** - assign at least one thermostat or AC (`climate.*` entity)
-4. **Add a temperature sensor** (optional but recommended) - enables Full Control with proportional valve control
-5. **Add a schedule** - create a `schedule.*` helper in HA and assign it
-6. **Set temperatures** - configure comfort (schedule on) and eco (schedule off) temperatures
+- **Minimum run / off time** — default `20 min` / `10 min`. The compressor is never asked to stop or restart faster than this.
+- **`enforce_uniform_mode`** — all heads in the group are kept in the same heat/cool mode (multisplit physics: the outdoor unit can only do one at a time).
+- **Conflict resolution** — `outdoor_temp` decides heat vs cool when heads disagree.
 
-RoomMind starts controlling immediately. If MPC is enabled (default), the thermal model begins learning in the background.
+### 2. Compressor demand control
+Instead of bang-bang per head, RoomMind writes a single **compressor capacity limit (%)** to the Faikin demand-control select (`select.<unit>_demand_control`), aggregated from all active heads.
 
-## Analytics
+- `demand_min` / `demand_max` — default `30` / `95` %. `demand_max` is a pure safety ceiling.
+- `demand_hysteresis` — `10` pts (don't re-apply small changes).
+- `demand_min_hold_minutes` — `10 min` between genuine changes (anti-thrash).
 
-![Analytics](docs/images/page-analytics.png)
+### 3. Weather feedforward + Δ-trim
+The demand baseline follows outdoor temperature, with a narrow symmetric trim on the summed temperature error of the active zones — reverse-engineered from a proven external controller.
 
-Select a room and time range (24h / 7d / 30d / 90d / custom) to view temperature history, heating/cooling power, solar irradiance, and model predictions. Export as CSV or diagnostics report.
+- Feedforward curve (outdoor °C → base %): `>12 → 30`, `>8 → 35`, `>4 → 45`, `>0 → 55`, else `70`.
+- Δ-trim range `−15 … +25` pts. Steady state ≈ base; mild peak ≈ 60.
 
-## How It Works
+### 4. Anti-ping-pong slew
+An inverter cycling around setpoint would otherwise flap the demand cap every few minutes. Demand **rises immediately** (cover a real heat/cool need) but only **steps down** once the active zones have stayed satisfied (Σδ ≤ `0.3 K`) for `demand_down_hold_minutes` (default `5 min`, `0` = legacy immediate).
 
-### Target Temperature Priority
+- A diagnostic sensor `sensor.roommind_demand_<group>_flaps` counts applied demand changes per rolling hour — near `0` when settled, high under a limit cycle.
 
-```
-Manual Override > Vacation > Presence Away > Schedule Block > Comfort / Eco  (+Mold Delta)
-```
+### 5. PV-surplus boost (opt-in, off by default)
+When the home produces solar surplus that would otherwise be exported cheap, lift the demand cap so the AC soaks the overflow into the building's thermal mass.
 
-### Full Control vs. Managed Mode
+- `pv_surplus_sensor` — you feed one Watt value (built however your inverter/evcc/grid-meter setup likes).
+- Engages after `≥ 1500 W` sustained for `≥ 30 min`; optional `pv_battery_soc_sensor` gates it (home battery keeps charge priority below `90 %`).
+- Adds `+15` pts while cooling, `+10` pts while heating, on top of base+trim. Final `demand_max` clamp still rules.
 
-An external temperature sensor is really where RoomMind starts to shine. It is the single most impactful addition for any room, unlocking the full potential of the thermal model, MPC optimization, and proportional device control.
+### 6. AC inverter setpoint strategy
+Per device, choose **proportional (offset)** or **direct** setpoints. In offset mode the setpoint is pushed below the cool target / above the heat target, scaled by MPC power demand, to force inverter capacity instead of fighting the unit's internal deadband.
 
-| | Full Control | Managed Mode |
-|---|---|---|
-| **When** | External temperature sensor assigned | No external sensor |
-| **How** | RoomMind decides heating/cooling/idle | Device self-regulates |
-| **Setpoints** | Proportional boost (e.g. 28°C to force heating at 80% power) | Exact target sent to device |
-| **Thermal model** | EKF learns room behavior, MPC optimizes | No learning, no optimization |
+- `ac_cool_offset_max` / `ac_heat_offset_max` — max K of offset at full power (default `2.0`).
 
-In **Full Control**, RoomMind dynamically calculates device setpoints based on MPC power output. Instead of sending 22°C to a TRV or AC, it might send 28°C to force the device to heat at full capacity. This solves common issues where devices with inaccurate internal sensors or built-in deadbands refuse to turn on. Each room shows its current mode ("Full Control" or "Managed") in the detail view.
+### 7. Staged idle (setback → off)
+Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback (default `0` = immediate off; set higher to keep low-load circulation). Setback offset is configurable.
 
-### MPC Climate Control
+### 8. Outdoor gates
+- `outdoor_cooling_min` (default `16 °C`) — never run the compressor for cooling below this averaged outdoor temperature (efficiency + condensation; open a window instead).
+- `outdoor_heating_max` (default `22 °C`) — don't heat above this.
 
-The Extended Kalman Filter observes temperature changes and learns each room's heat loss rate, heating/cooling power, and solar responsiveness. Once calibrated (prediction accuracy < 0.5 C), the MPC optimizer plans ahead and calculates proportional power for smoother control.
+### 9. Configurable vacation action
+Vacation can **turn heating off while cooling continues** — for a summer trip you protect the house from overheating without wasting energy on heat.
 
-Until calibrated (~60 idle + ~20 active samples), RoomMind falls back to simple on/off control with hysteresis.
+### 10. Panel fix for HA 2026.5+
+HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
 
-For a more detailed explanation of the `Priority` slider, device types, setpoint modes, idle behavior, and smart source selection, see the [Control and Device Guide](docs/control-and-devices.md).
+---
 
-## Entities Created
+## Companion HA automation (outside this integration)
 
-| Entity | Description |
-|--------|-------------|
-| `sensor.roommind_{area_id}_target_temp` | Current target temperature |
-| `sensor.roommind_{area_id}_mode` | Current mode: `idle`, `heating`, or `cooling` |
-| `climate.roommind_{area_id}_override` | Manual override climate entity (controllable from dashboards, automations, voice) |
-| `switch.roommind_vacation` | Global vacation mode toggle |
-| `switch.roommind_{area_id}_cover_auto` | Per-room automatic cover control toggle |
-| `binary_sensor.roommind_{area_id}_cover_paused` | On when manual cover override is detected |
+Fan-mode **night/auto** per room is handled by a small HA automation (not part of the integration): when a room's demand exceeds a threshold the head's fan switches to `auto`, otherwise back to `night` — presence-aware. It lives in a HA package and pairs nicely with the demand control above.
 
-These can be used in HA automations, dashboards, or other integrations.
+---
 
-## Troubleshooting
+## Installation (this fork via HACS)
 
-**MPC shows "learning" for a long time** - The model needs ~60 idle and ~20 heating/cooling observations. This can take a few days for rooms that heat rarely. Check progress in the Analytics tab.
+[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=turbolooser&repository=roommind&category=integration)
 
-**Room not heating/cooling when expected** - Check outdoor gating thresholds in Settings > Control. Default: no cooling below 16 C, no heating above 22 C.
+1. HACS → ⋮ → **Custom repositories**
+2. Add `https://github.com/turbolooser/roommind`, category **Integration**
+3. Install **RoomMind**, then restart Home Assistant
+4. **Settings → Devices & Services → Add Integration → RoomMind**
 
-**Thermal model seems wrong after room changes** - If you've changed insulation, radiators, or moved sensors, reset the model in Settings > Reset Thermal Data.
+> Tracking this fork means HACS updates come from here, not from upstream. To pull upstream improvements, merge them into the fork and cut a new release.
 
-**Frontend not updating after update** - Hard-refresh: **Cmd+Shift+R** (Mac) or **Ctrl+Shift+R** (Windows/Linux).
+---
 
-## Requirements
+## Credits
 
-- **Home Assistant** 2026.2+
-- At least one HA area with a `climate.*` entity
-- Optional: temperature sensor, humidity sensor, window sensors, weather entity, schedule helpers, person entities
+- Original integration & all core engineering: **[snazzybean/roommind](https://github.com/snazzybean/roommind)** (MIT)
+- Daikin head control bridge: **[Faikin](https://github.com/revk/ESP32-Faikin)** by RevK
+- This fork: [turbolooser](https://github.com/turbolooser) — multisplit tuning only
 
-No cloud services required - everything runs locally.
-
-## Feedback & Contributing
-
-- 🐛 **Bug reports** - [Open an issue](https://github.com/snazzybean/roommind/issues/new?template=bug_report.yml)
-- 💡 **Feature requests & ideas** - [Post in Discussions](https://github.com/snazzybean/roommind/discussions/categories/feature-requests) so the community can vote and discuss
-- 🙋 **Questions & usage help** - [Ask in Q&A](https://github.com/snazzybean/roommind/discussions/categories/q-a)
-- 📣 **Announcements** - [Follow Announcements](https://github.com/snazzybean/roommind/discussions/categories/announcements)
+If you like RoomMind, please support the original author, not this fork. Danke! 🙂
