@@ -22,6 +22,7 @@ from ..control.mpc_controller import (
     check_acs_can_heat,
     get_can_heat_cool,
     is_mpc_active,
+    season_prefers_cool,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -81,11 +82,16 @@ async def _compute_target_forecast(
     hours: float = 3.0,
     interval_minutes: int = 5,
     schedule_blocks_cache: dict[str, dict] | None = None,
+    prefer_cool: bool = False,
 ) -> list[dict]:
     """Compute target temperature forecast for the next N hours.
 
     Each point contains ``target_temp`` (chart display, mode-aware),
     ``heat_target`` and ``cool_target`` (for MPC simulator).
+
+    ``prefer_cool`` selects which setpoint the auto-mode chart line shows so
+    it matches the live sensor's season-aware display (cooling season → cool
+    setpoint) instead of always dropping to the heat setpoint.
     """
     from ..utils.presence_utils import is_presence_away
     from ..utils.schedule_utils import (
@@ -150,8 +156,13 @@ async def _compute_target_forecast(
             target = cool_target
         elif climate_mode == CLIMATE_MODE_HEAT_ONLY:
             target = heat_target
+        elif prefer_cool and cool_target is not None:
+            # Auto mode, cooling season: show the cool setpoint so the
+            # projected line matches the live sensor and the recorded history
+            # instead of dropping to the heat setpoint.
+            target = cool_target
         else:
-            # Auto mode: show heat target (primary for chart line)
+            # Auto mode, heating season (or no cool target): heat setpoint.
             target = heat_target
 
         result.append(
@@ -254,9 +265,21 @@ async def build_analytics_data(
     # Build merged forecast: same format as history points, on a shared 5-min grid
     room_config = store.get_room(area_id) or {}
     mold_delta = 0.0
+    prefer_cool = False
     if coordinator:
         live = coordinator.rooms.get(area_id, {})
         mold_delta = live.get("mold_prevention_delta", 0.0)
+        # Match the live sensor's season-aware display so the projected chart
+        # line connects to history instead of dropping to the heat setpoint
+        # during cooling season. Same decision source as the idle target.
+        can_heat, can_cool = get_can_heat_cool(
+            room_config,
+            coordinator.outdoor_temp_effective,
+            acs_can_heat=check_acs_can_heat(hass, room_config),
+        )
+        prefer_cool = season_prefers_cool(
+            getattr(coordinator, "_last_active_mode", {}).get(area_id), can_heat, can_cool
+        )
     try:
         target_forecast = await _compute_target_forecast(
             hass,
@@ -264,6 +287,7 @@ async def build_analytics_data(
             settings,
             mold_prevention_delta=mold_delta,
             schedule_blocks_cache=getattr(coordinator, "_schedule_blocks_cache", None),
+            prefer_cool=prefer_cool,
         )
     except Exception:  # noqa: BLE001
         _LOGGER.debug("Target forecast computation failed for '%s'", area_id)
