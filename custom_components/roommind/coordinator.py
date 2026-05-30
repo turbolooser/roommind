@@ -70,6 +70,7 @@ from .control.mpc_controller import (
     check_acs_can_heat,
     get_can_heat_cool,
     is_mpc_active,
+    season_prefers_cool,
 )
 from .control.solar import compute_q_solar_norm
 from .control.thermal_model import RoomModelManager
@@ -1451,18 +1452,13 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         While idle there is no single active setpoint — both the heating and
         cooling targets apply. Naively showing comfort_heat makes the displayed
         target snap down on every idle gap during cooling season, which reads
-        as the room flapping between heat and cool. Prefer the most recent
-        active direction (stable across idle gaps); fall back to the
-        capability/season gate, then to whichever target exists.
+        as the room flapping between heat and cool. Show the season-correct
+        direction instead.
         """
-        last_active = self._last_active_mode.get(area_id)
-        if last_active == MODE_COOLING and targets.cool is not None:
+        prefer_cool = season_prefers_cool(self._last_active_mode.get(area_id), can_heat, can_cool)
+        if prefer_cool and targets.cool is not None:
             return targets.cool
-        if last_active == MODE_HEATING and targets.heat is not None:
-            return targets.heat
-        if can_cool and not can_heat and targets.cool is not None:
-            return targets.cool
-        if can_heat and not can_cool and targets.heat is not None:
+        if not prefer_cool and targets.heat is not None:
             return targets.heat
         return targets.heat if targets.heat is not None else targets.cool
 
