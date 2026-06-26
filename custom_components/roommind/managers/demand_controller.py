@@ -4,10 +4,11 @@ The demand select is only a **power cap** on the compressor group — the MPC
 owns comfort via the AC setpoint. So the cap just has to open on demand and
 close at rest. Two models, picked by ``mode``:
 
-* **Cooling** — one lever: ``cap = FLOOR + SLOPE·Σδ``, where Σδ is the summed
-  room overshoot (cur − target) of the active cooling zones. The demand shows
-  up directly as overshoot, so no weather feedforward and no PV boost are
-  needed — a single, explainable line from a resting floor to the ceiling.
+* **Cooling** — feedforward + feedback: ``cap = FLOOR(outdoor) + SLOPE·Σδ``.
+  ``FLOOR`` rises with outdoor temp (the hold-load against heat ingress);
+  ``SLOPE·Σδ`` adds pulldown from the summed room overshoot (cur − target) of
+  the active cooling zones. The floor stops the cap from collapsing as a room
+  nears target on a hot day. No PV boost while cooling.
 
 * **Heating** — the legacy field-tuned model (kept verbatim): an
   outdoor-temperature feedforward ``base`` (colder → higher) plus a small
@@ -24,7 +25,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ..const import (
-    DEMAND_COOL_FLOOR,
+    DEMAND_COOL_FLOOR_CURVE,
     DEMAND_COOL_SLOPE,
     DEMAND_FEEDFORWARD_CURVE,
     DEMAND_GRID_STEP,
@@ -95,6 +96,7 @@ def compute_demand(
     pv_boost: int = 0,
     mode: str | None = None,
     curve: Sequence[tuple[float, int]] = DEMAND_FEEDFORWARD_CURVE,
+    cool_floor_curve: Sequence[tuple[float, int]] = DEMAND_COOL_FLOOR_CURVE,
     grid: int = DEMAND_GRID_STEP,
 ) -> DemandResult:
     """Return the group demand cap (%) plus diagnostics for one group.
@@ -105,10 +107,11 @@ def compute_demand(
 
     ``mode`` picks the model:
 
-    * **Cooling** — one lever: ``cap = FLOOR + SLOPE·Σδ`` (see const.py). The
-      demand select is only a power cap; the MPC owns comfort via the setpoint,
-      so the cap just tracks room overshoot. No weather feedforward, no
-      ``pv_boost`` (it is ignored while cooling).
+    * **Cooling** — feedforward + feedback: ``cap = FLOOR(outdoor) + SLOPE·Σδ``
+      (see const.py). ``FLOOR`` rises with outdoor temp (hold-load against heat
+      ingress), ``SLOPE·Σδ`` adds pulldown from room overshoot. The demand select
+      is only a power cap; the MPC owns comfort via the setpoint. No ``pv_boost``
+      while cooling (it is ignored).
     * **Heating / unknown** — legacy field-tuned model: weather feedforward
       ``base`` + symmetric ``adjustment`` trim + ``pv_boost``. Unchanged.
 
@@ -119,10 +122,11 @@ def compute_demand(
         demand_max = demand_min
 
     cooling = mode == MODE_COOLING
-    # Diagnostics base: cooling rests on the flat floor; heating uses the
-    # weather feedforward (unknown outdoor temp → mild, legacy float(10)).
+    # Both modes pick a weather-feedforward base/floor: the cooling floor RISES
+    # with outdoor temp (hold-load), the heating curve as it gets colder.
+    # Unknown outdoor temp → mild (legacy float(10) default).
     t_out = 10.0 if outdoor_temp is None else outdoor_temp
-    base = DEMAND_COOL_FLOOR if cooling else _feedforward_base(t_out, curve)
+    base = _feedforward_base(t_out, cool_floor_curve if cooling else curve)
 
     if not active_deltas:
         return DemandResult(
@@ -137,7 +141,8 @@ def compute_demand(
 
     total_delta = sum(active_deltas)
     if cooling:
-        # cap = FLOOR + SLOPE·Σδ — the whole cooling model.
+        # cap = FLOOR(outdoor) + SLOPE·Σδ — base is the weather floor, this is
+        # the pulldown surcharge from room overshoot.
         adjustment = int(round(DEMAND_COOL_SLOPE * total_delta))
         applied_boost = 0
     else:
@@ -164,6 +169,7 @@ def compute_demand_percent(
     pv_boost: int = 0,
     mode: str | None = None,
     curve: Sequence[tuple[float, int]] = DEMAND_FEEDFORWARD_CURVE,
+    cool_floor_curve: Sequence[tuple[float, int]] = DEMAND_COOL_FLOOR_CURVE,
     grid: int = DEMAND_GRID_STEP,
 ) -> int:
     """Backward-compatible thin wrapper returning only the demand %."""
@@ -175,5 +181,6 @@ def compute_demand_percent(
         pv_boost=pv_boost,
         mode=mode,
         curve=curve,
+        cool_floor_curve=cool_floor_curve,
         grid=grid,
     ).percent
