@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Context
 
 DOMAIN = "roommind"
-VERSION = "1.7.4.2"
+VERSION = "1.7.4.3"
 
 # Platforms
 PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.BINARY_SENSOR, Platform.CLIMATE]
@@ -123,16 +123,18 @@ DEFAULT_PV_BOOST_HEAT_PERCENT = 10  # %-points added to demand while heating
 # compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,
 # evaluated highest-first. Mirrors the field-tuned legacy curve. HEATING ONLY.
 DEMAND_FEEDFORWARD_CURVE = ((12.0, 30), (8.0, 35), (4.0, 45), (0.0, 55), (-999.0, 70))
-# Cooling demand model — deliberately just ONE lever. The demand select is only
-# a *power cap* on the compressor group; the MPC regulates comfort via the AC
-# setpoint. So the cap only has to "open on demand, close at rest", and the
-# demand shows up directly as room overshoot — no weather feedforward, no PV
-# boost needed. cap = clamp(FLOOR + SLOPE·Σδ), where Σδ is the summed °C of
-# room overshoot (cur − target) across active cooling zones.
-#   FLOOR = resting cap when every room is at/under target (efficient idle)
-#   SLOPE = added %-points per 1 °C of total overshoot (how hard it ramps up)
-DEMAND_COOL_FLOOR = 40
-DEMAND_COOL_SLOPE = 25
+# Cooling demand model — feedforward + feedback:
+#   cap = clamp( FLOOR(outdoor) + SLOPE·Σδ , demand_min, demand_max )
+# FLOOR = weather feedforward = the hold-load against heat ingress; it RISES with
+# outdoor temp (hotter → more compressor needed just to hold target). SLOPE·Σδ =
+# feedback = the pulldown surcharge from summed room overshoot (cur − target).
+# Why the feedforward: with Σδ alone the cap collapses to its mild floor as a
+# room nears target, but on a hot day the heat ingress doesn't stop → the room
+# can never quite reach target (the top-floor-at-30° case). The floor keeps the
+# cap high enough to hold, even at Σδ≈0. (t_out_above °C, floor %) pairs,
+# highest-first. 29°→70 is field-measured (cap 90 cooled DG, 65 didn't).
+DEMAND_COOL_FLOOR_CURVE = ((29.0, 70), (27.0, 62), (25.0, 54), (23.0, 46), (-999.0, 40))
+DEMAND_COOL_SLOPE = 25  # added %-points per 1 °C of total room overshoot
 
 # AC inverter setpoint strategy (cooling + AC heating; TRV/UFH unaffected).
 # "boost" (default) keeps the legacy proportional ramp toward the device
