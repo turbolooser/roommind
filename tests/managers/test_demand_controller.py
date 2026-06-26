@@ -141,43 +141,64 @@ def test_cooling_sign_is_caller_supplied():
 
 
 @pytest.mark.parametrize(
-    ("total_delta", "expected"),
+    ("t_out", "expected_floor"),
     [
-        (-0.4, 30),  # rooms under target → clamp down to demand_min
-        (0.0, 40),  # at target → resting floor
-        (0.5, 50),  # 40 + 25·0.5 = 52.5 → snap 50
-        (1.0, 65),  # 40 + 25 = 65 (DG 1° over: was 45 with the broken curve)
-        (1.48, 75),  # 40 + 37 = 77 → snap 75 (live 3-room snapshot)
-        (2.0, 90),  # 40 + 50 = 90
-        (2.5, 95),  # 40 + 62.5 = 102.5 → clamp demand_max
+        (33.0, 70),  # >29 → heatwave hold-load
+        (28.0, 62),  # >27
+        (26.0, 54),  # >25
+        (24.0, 46),  # >23
+        (20.0, 40),  # mild → resting floor
+        (None, 40),  # unknown → mild 10° → floor
     ],
 )
-def test_cool_linear_model(total_delta, expected):
-    """Cooling is one lever: cap = clamp(FLOOR 40 + SLOPE 25·Σδ).
+def test_cool_floor_curve(t_out, expected_floor):
+    """Cooling FLOOR rises with outdoor temp (hold-load feedforward)."""
+    res = compute_demand(t_out, [], 30, 95, mode="cooling")
+    assert res.base == expected_floor
 
-    Outdoor temp is irrelevant — the cap tracks room overshoot directly.
-    """
-    res = compute_demand(23.6, [total_delta], 30, 95, mode="cooling")
-    assert res.base == 40  # flat resting floor (no weather feedforward)
+
+@pytest.mark.parametrize(
+    ("total_delta", "expected"),
+    [
+        (-0.4, 35),  # 46 - 10 = 36 → snap 35
+        (0.0, 45),  # floor 46 → snap 45
+        (0.5, 60),  # 46 + 12.5 = 58.5 → snap 60
+        (1.0, 70),  # 46 + 25 = 71 → snap 70
+        (2.0, 95),  # 46 + 50 = 96 → clamp demand_max
+    ],
+)
+def test_cool_floor_plus_slope(total_delta, expected):
+    """cap = clamp(FLOOR(outdoor) + SLOPE·Σδ). At 24 °C the floor is 46."""
+    res = compute_demand(24.0, [total_delta], 30, 95, mode="cooling")
+    assert res.base == 46
     assert res.percent == expected
-    # Same result whatever the outdoor temp — proves the feedforward is gone.
-    assert compute_demand_percent(33.0, [total_delta], 30, 95, mode="cooling") == expected
+
+
+def test_cool_floor_breaks_teufelskreis_on_hot_day():
+    """The feedforward floor keeps the cap high on a hot day even as a room
+    nears target (Σδ small) — the top-floor-at-30° fix.
+    """
+    # 30 °C, DG ~0.6° over: floor 70 + 15 = 85 (vs 40+15=55, which wouldn't hold).
+    assert compute_demand_percent(30.0, [0.6], 30, 95, mode="cooling") == 85
+    # Same overshoot but mild (20 °C): floor 40 + 15 = 55 → stays efficient.
+    assert compute_demand_percent(20.0, [0.6], 30, 95, mode="cooling") == 55
 
 
 def test_cool_ignores_pv_boost():
     """PV boost is heating-only now → ignored (and zeroed) while cooling."""
-    res = compute_demand(23.6, [1.0], 30, 95, mode="cooling", pv_boost=40)
+    res = compute_demand(24.0, [1.0], 30, 95, mode="cooling", pv_boost=40)
     assert res.pv_boost == 0
-    assert res.percent == 65  # 40 + 25, boost makes no difference
+    assert res.percent == 70  # floor 46 + 25, boost makes no difference
 
 
 def test_cool_lifts_cap_where_broken_heat_curve_pinned_to_floor():
     """Regression for 'RM won't cool properly': the heat curve floored the
-    cooling base at 30 → cap stuck at 45; the linear model lifts it to 75.
+    cooling base at 30 → cap stuck at 45; the cool feedforward lifts it.
     """
     deltas = [1.05, 0.05, 0.38]  # field snapshot: Σδ ≈ 1.48
     assert compute_demand_percent(24.0, deltas, 30, 95) == 45  # heat curve (bug)
-    assert compute_demand_percent(24.0, deltas, 30, 95, mode="cooling") == 75
+    # cool: floor(24°)=46 + 37 = 83 → snap 85.
+    assert compute_demand_percent(24.0, deltas, 30, 95, mode="cooling") == 85
 
 
 def test_heating_and_default_mode_keep_heat_curve():
