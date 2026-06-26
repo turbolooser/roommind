@@ -35,6 +35,8 @@
           "pv_battery_soc_min": "Min. Batterie-SoC für Boost (%)",
           "pv_boost_cool_percent": "Boost im Kühlbetrieb (%-Punkte)",
           "pv_boost_heat_percent": "Boost im Heizbetrieb (%-Punkte)",
+          "pv_cool_demand_max": "Cool-Decke bei PV-Überschuss (%)",
+          "pv_cool_soc_min": "Min. Batterie-SoC für Cool-Decke (%)",
           "ac_setpoint_strategy": "AC-Setpoint-Strategie",
           "ac_cool_offset_max": "Max. Kühl-Offset (K)",
           "ac_heat_offset_max": "Max. AC-Heiz-Offset (K)"
@@ -59,6 +61,8 @@
           "pv_battery_soc_min": "Mindest-Ladestand der Hausbatterie, damit der Boost greift. Ignoriert, wenn kein SoC-Sensor gesetzt ist.",
           "pv_boost_cool_percent": "Demand-%-Punkte, die zusätzlich zum Base + Trim drauf kommen, während die Gruppe aktiv kühlt.",
           "pv_boost_heat_percent": "Demand-%-Punkte, die zusätzlich zum Base + Trim drauf kommen, während die Gruppe aktiv heizt (sinnvoll in der Übergangszeit).",
+          "pv_cool_demand_max": "Angehobene Demand-Decke im Kühlbetrieb, solange PV-Überschuss anhält — der Verdichter darf ein paar Hz härter laufen, weil die Sonne es zahlt. Fällt sofort auf den normalen Demand-Max zurück, wenn der Überschuss wegfällt.",
+          "pv_cool_soc_min": "Eigener, niedrigerer Batterie-Ladestand für die Cool-Decken-Anhebung — an einem heißen Mittag soll der Überschuss direkt verkühlt werden, statt erst auf eine volle Batterie zu warten. Ignoriert, wenn kein SoC-Sensor gesetzt ist.",
           "ac_setpoint_strategy": "\"Boost\" rampt den AC-Sollwert zum Geräte-Limit (Legacy). \"Offset\" verschiebt das Komfortziel um höchstens die Offsets unten, sodass ein Inverter sanft moduliert. TRV/Fußbodenheizung bleibt unberührt.",
           "ac_cool_offset_max": "Bei voller Anforderung um so viele K unter das Kühlziel kühlen.",
           "ac_heat_offset_max": "Bei voller Anforderung um so viele K über das Heizziel AC-heizen."
