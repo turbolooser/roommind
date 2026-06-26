@@ -504,23 +504,31 @@ async def test_cool_ceiling_not_lifted_without_surplus(hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
-async def test_cool_ceiling_uses_lower_soc_gate(hass, mock_config_entry):
-    """The cool ceiling has its own lower SoC gate (60): a SoC that would block
-    the heat boost (90) still lifts the cool ceiling. Below 60 → blocked.
+async def test_cool_ceiling_ignores_soc(hass, mock_config_entry):
+    """The cool ceiling has NO SoC gate: a sustained surplus already implies a
+    full battery, so even a low SoC (that would block the heat boost) lifts it.
     """
     c = _setup(hass, mock_config_entry, sel_current="30")
     c.outdoor_temp_effective = 34.0
     c._group_pv_boost_since[GID] = time.monotonic() - 3600
-    # SoC 70: below the heat gate (90) but above the cool gate (60) → lifts.
-    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "70"}))
+    # SoC 40: far below the heat gate (90) — cool ceiling lifts anyway.
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "40"}))
     await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
     assert c._demand_debug[GID]["pv_reason"] == "cool_ceiling"
     assert c._demand_debug[GID]["demand_max_eff"] == 100
+    calls = _demand_calls(hass)
+    assert calls and calls[-1][0][2]["option"] == "100"
 
-    # SoC 50: below the cool gate too → no lift, timer reset.
+
+@pytest.mark.asyncio
+async def test_heat_boost_still_soc_gated(hass, mock_config_entry):
+    """Regression: dropping the cool SoC gate must not weaken the heat gate —
+    heating still blocks below pv_battery_soc_min (90).
+    """
+    c = _setup(hass, mock_config_entry, sel_current="30")
     c._group_pv_boost_since[GID] = time.monotonic() - 3600
-    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "50"}))
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "70"}))
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 0
     assert c._demand_debug[GID]["pv_reason"] == "soc_low"
-    assert c._demand_debug[GID]["demand_max_eff"] == 95
     assert GID not in c._group_pv_boost_since
