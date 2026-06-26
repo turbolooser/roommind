@@ -532,3 +532,38 @@ async def test_heat_boost_still_soc_gated(hass, mock_config_entry):
     assert c._demand_debug[GID]["pv_boost"] == 0
     assert c._demand_debug[GID]["pv_reason"] == "soc_low"
     assert GID not in c._group_pv_boost_since
+
+
+@pytest.mark.asyncio
+async def test_cool_ceiling_drop_bypasses_down_slew(hass, mock_config_entry):
+    """Regression: when the PV cool ceiling drops (surplus gone → eff max 95)
+    while zones still need cooling, the held cap must step 100→95 immediately.
+    The down-slew only guards Σδ-driven flapping, not a lower ceiling — else the
+    compressor keeps running on grid/battery after the sun is gone (energy waste).
+    """
+    s = dict(_SLEW, demand_hysteresis=5)  # let a single 5-pt step write
+    c = _setup(hass, mock_config_entry, sel_current="100")  # device held at 100
+    c._group_demand_state[GID] = (100, time.monotonic())  # last applied 100 (from surplus)
+    c.outdoor_temp_effective = 34.0  # cool floor 90
+    # cooling, Σδ 0.5 > 0.3 → unsettled → would be down_wait; no surplus → eff max 95.
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.5), _rooms(), s)
+    calls = _demand_calls(hass)
+    assert calls and calls[-1][0][2]["option"] == "95"  # clamped to ceiling, not held at 100
+    assert c._demand_debug[GID]["slew"] == "ceiling_drop"
+    assert c._demand_debug[GID]["demand_max_eff"] == 95
+
+
+@pytest.mark.asyncio
+async def test_cool_ceiling_hold_at_100_while_surplus(hass, mock_config_entry):
+    """Counterpart: while surplus still lifts the ceiling to 100, the slew holds
+    100 normally (no spurious ceiling_drop) — the clamp only bites on a drop.
+    """
+    c = _setup(hass, mock_config_entry, sel_current="100")
+    c.outdoor_temp_effective = 34.0
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600  # surplus armed
+    c._group_demand_state[GID] = (100, time.monotonic())
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "100", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.5), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["demand_max_eff"] == 100
+    assert c._demand_debug[GID]["slew"] != "ceiling_drop"
+    assert c._demand_debug[GID]["pv_reason"] == "cool_ceiling"
