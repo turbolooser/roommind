@@ -124,10 +124,11 @@ DEFAULT_PV_BOOST_HEAT_PERCENT = 10  # %-points added to demand while heating
 # demand_max; what actually buys head-room on a heatwave is lifting the ceiling
 # itself, letting the compressor run a few Hz harder while the sun pays for it.
 # Only applied while cooling + surplus gate satisfied; falls back to demand_max
-# the moment surplus drops. Uses its own, lower SoC gate — on a 37 °C noon you
-# want to dump the sun straight into cooling, not wait for a 90 %-full battery.
+# the moment surplus drops. No SoC gate on the cool ceiling: the surplus sensor
+# only goes positive once the battery has taken its charge, so a sustained
+# ≥min_w surplus already implies a (near-)full battery — a SoC check would be
+# redundant. (The heating boost keeps its SoC gate, see above.)
 DEFAULT_PV_COOL_DEMAND_MAX = 100  # % ceiling while cooling under PV surplus
-DEFAULT_PV_COOL_SOC_MIN = 60  # %; lower SoC gate for the cool ceiling lift
 # Outdoor-temp feedforward: heat pumps lose capacity when cold → need a higher
 # compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,
 # evaluated highest-first. Mirrors the field-tuned legacy curve. HEATING ONLY.
