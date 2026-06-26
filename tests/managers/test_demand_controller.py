@@ -143,7 +143,9 @@ def test_cooling_sign_is_caller_supplied():
 @pytest.mark.parametrize(
     ("t_out", "expected_floor"),
     [
-        (33.0, 70),  # >29 → heatwave hold-load
+        (34.0, 90),  # >33 → heatwave hold-load near max
+        (32.0, 80),  # >31
+        (30.0, 70),  # >29 (field-measured cooled DG at cap 90)
         (28.0, 62),  # >27
         (26.0, 54),  # >25
         (24.0, 46),  # >23
@@ -155,6 +157,18 @@ def test_cool_floor_curve(t_out, expected_floor):
     """Cooling FLOOR rises with outdoor temp (hold-load feedforward)."""
     res = compute_demand(t_out, [], 30, 95, mode="cooling")
     assert res.base == expected_floor
+
+
+def test_cool_floor_pins_to_max_in_heatwave():
+    """At heatwave outdoor temps the lifted floor + any real Σδ pins the cap
+    stably to demand_max — no more hovering at 90 and flapping the hysteresis.
+    """
+    # 34 °C: floor 90, even a small Σδ=0.3 → 90+8=98 → clamp/snap 95.
+    assert compute_demand_percent(34.0, [0.3], 30, 95, mode="cooling") == 95
+    # 33.6 °C (the field snapshot), DG ~0.6 over: floor 90 + 15 = 105 → 95.
+    assert compute_demand_percent(33.6, [0.6], 30, 95, mode="cooling") == 95
+    # The same heatwave floor can reach 100 when the ceiling is lifted by PV.
+    assert compute_demand_percent(34.0, [0.3], 30, 100, mode="cooling") == 100
 
 
 @pytest.mark.parametrize(

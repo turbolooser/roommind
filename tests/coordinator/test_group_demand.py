@@ -454,17 +454,73 @@ async def test_pv_boost_clamps_to_demand_max(hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
-async def test_pv_boost_skipped_while_cooling(hass, mock_config_entry):
-    """Cooling uses the linear room-overshoot model → PV boost never applies,
-    even with ample surplus and a full battery; the gate timer is cleared too.
+async def test_cool_never_adds_additive_boost(hass, mock_config_entry):
+    """Cooling uses the linear room-overshoot model → the *additive* PV boost
+    never applies (it verpufft against the ceiling). PV surplus lifts the
+    *ceiling* instead, so the shared gate timer stays armed while cooling.
     """
     c = _setup(hass, mock_config_entry, sel_current="30")
-    c._group_pv_boost_since[GID] = time.monotonic() - 3600  # armed from a prior heat cycle
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600  # armed from a prior cycle
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
     await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
-    assert c._demand_debug[GID]["pv_boost"] == 0
-    assert c._demand_debug[GID]["pv_reason"] == "cooling"
-    assert GID not in c._group_pv_boost_since  # timer cleared while cooling
-    # cap = FLOOR 40 + SLOPE 25·1.0 = 65, no boost.
+    assert c._demand_debug[GID]["pv_boost"] == 0  # no additive boost, ever, while cooling
+    assert c._demand_debug[GID]["pv_reason"] == "cool_ceiling"
+    assert GID in c._group_pv_boost_since  # ceiling path shares + keeps the timer
+    # At mild outdoor 10° the cap (FLOOR 40 + SLOPE·1.0 = 65) sits below either
+    # ceiling, so the lift to 100 doesn't change the sent value here.
+    assert c._demand_debug[GID]["demand_max_eff"] == 100
     calls = _demand_calls(hass)
     assert calls and calls[-1][0][2]["option"] == "65"
+
+
+@pytest.mark.asyncio
+async def test_cool_ceiling_lifts_cap_to_100_in_heatwave(hass, mock_config_entry):
+    """Heatwave + sustained surplus → ceiling lifts 95→100 and the cap follows."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c.outdoor_temp_effective = 34.0  # FLOOR 90
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    # FLOOR 90 + SLOPE 25·1.0 = 115 → without lift clamp 95, with lift clamp 100.
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["demand_max_eff"] == 100
+    assert c._demand_debug[GID]["pv_reason"] == "cool_ceiling"
+    calls = _demand_calls(hass)
+    assert calls and calls[-1][0][2]["option"] == "100"
+
+
+@pytest.mark.asyncio
+async def test_cool_ceiling_not_lifted_without_surplus(hass, mock_config_entry):
+    """No surplus → ceiling stays at demand_max (95); cap clamps to 95."""
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c.outdoor_temp_effective = 34.0
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "200", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["demand_max_eff"] == 95
+    assert c._demand_debug[GID]["pv_reason"] == "surplus_low"
+    assert GID not in c._group_pv_boost_since
+    calls = _demand_calls(hass)
+    assert calls and calls[-1][0][2]["option"] == "95"
+
+
+@pytest.mark.asyncio
+async def test_cool_ceiling_uses_lower_soc_gate(hass, mock_config_entry):
+    """The cool ceiling has its own lower SoC gate (60): a SoC that would block
+    the heat boost (90) still lifts the cool ceiling. Below 60 → blocked.
+    """
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c.outdoor_temp_effective = 34.0
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    # SoC 70: below the heat gate (90) but above the cool gate (60) → lifts.
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "70"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_reason"] == "cool_ceiling"
+    assert c._demand_debug[GID]["demand_max_eff"] == 100
+
+    # SoC 50: below the cool gate too → no lift, timer reset.
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "50"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_reason"] == "soc_low"
+    assert c._demand_debug[GID]["demand_max_eff"] == 95
+    assert GID not in c._group_pv_boost_since
