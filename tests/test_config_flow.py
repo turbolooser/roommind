@@ -112,7 +112,6 @@ class TestOptionsFlow:
             "pv_boost_cool_percent": 15,
             "pv_boost_heat_percent": 10,
             "pv_cool_demand_max": 100,
-            "pv_cool_soc_min": 60,
         }
         result = await flow.async_step_init(user_input)
 
@@ -151,7 +150,6 @@ class TestOptionsFlow:
                 "pv_boost_cool_percent": 15,
                 "pv_boost_heat_percent": 10,
                 "pv_cool_demand_max": 100,
-                "pv_cool_soc_min": 60,
             }
         )
 

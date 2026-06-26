@@ -39,7 +39,6 @@ from .const import (
     DEFAULT_PV_BOOST_ENABLED,
     DEFAULT_PV_BOOST_HEAT_PERCENT,
     DEFAULT_PV_COOL_DEMAND_MAX,
-    DEFAULT_PV_COOL_SOC_MIN,
     DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES,
     DEFAULT_PV_SURPLUS_MIN_W,
     DEFAULT_VACATION_ACTION,
@@ -2052,7 +2051,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         mode_active: str | None,
         settings: dict,
         now: float,
-        soc_min: float,
+        soc_min: float | None,
     ) -> tuple[bool, str]:
         """Shared PV-surplus gate for one compressor group.
 
@@ -2067,12 +2066,14 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         - ``warming_up``    — gate satisfied but sustained-duration not yet met
         - ``active``        — all gates passed for the sustained duration
 
-        The ``soc_min`` is passed in by the caller so the heat boost and the
-        cool ceiling lift can apply different SoC thresholds against the same
-        surplus/duration timer. Rise is gated by *sustained* duration
-        (anti-flap); any miss resets the timer so the very next miss tick
-        already reports inactive — we never want to hold the cap higher than
-        reality on a stale "things looked sunny 30 min ago".
+        ``soc_min`` is passed in by the caller: the heat boost passes its
+        configured threshold; the cool ceiling passes ``None`` to skip the SoC
+        check entirely (the surplus sensor only goes positive once the battery
+        is charged, so a sustained surplus already implies a full battery).
+        Rise is gated by *sustained* duration (anti-flap); any miss resets the
+        timer so the very next miss tick already reports inactive — we never
+        want to hold the cap higher than reality on a stale "things looked
+        sunny 30 min ago".
         """
         if not settings.get("pv_boost_enabled", DEFAULT_PV_BOOST_ENABLED):
             self._group_pv_boost_since.pop(gid, None)
@@ -2104,7 +2105,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             return False, "surplus_low"
 
         soc_eid = settings.get("pv_battery_soc_sensor")
-        if soc_eid:
+        if soc_eid and soc_min is not None:
             soc_state = self.hass.states.get(soc_eid)
             try:
                 soc = float(soc_state.state) if soc_state else float("nan")
@@ -2230,8 +2231,9 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 # pv_cool_demand_max, letting the compressor run a few Hz harder
                 # while the sun pays for it. Uses its own lower SoC gate.
                 pv_boost = 0
-                cool_soc_min = float(settings.get("pv_cool_soc_min", DEFAULT_PV_COOL_SOC_MIN))
-                surplus_on, pv_reason = self._pv_surplus_active(gid, group_mode, settings, now, cool_soc_min)
+                # No SoC gate on the cool ceiling (None) — sustained surplus
+                # already implies a charged battery (see const.py).
+                surplus_on, pv_reason = self._pv_surplus_active(gid, group_mode, settings, now, None)
                 if surplus_on:
                     pv_cool_max = int(settings.get("pv_cool_demand_max", DEFAULT_PV_COOL_DEMAND_MAX))
                     if pv_cool_max > effective_demand_max:
