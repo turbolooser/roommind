@@ -35,6 +35,8 @@
           "pv_battery_soc_min": "Min battery SoC to boost (%)",
           "pv_boost_cool_percent": "Boost while cooling (%-points)",
           "pv_boost_heat_percent": "Boost while heating (%-points)",
+          "pv_cool_demand_max": "Cool ceiling under PV surplus (%)",
+          "pv_cool_soc_min": "Min battery SoC for cool ceiling (%)",
           "ac_setpoint_strategy": "AC setpoint strategy",
           "ac_cool_offset_max": "Max cooling offset (K)",
           "ac_heat_offset_max": "Max AC heating offset (K)"
@@ -59,6 +61,8 @@
           "pv_battery_soc_min": "Minimum battery state-of-charge for boost to engage. Ignored when no SoC sensor is set.",
           "pv_boost_cool_percent": "Demand %-points added on top of base + trim while the group is actively cooling.",
           "pv_boost_heat_percent": "Demand %-points added on top of base + trim while the group is actively heating (useful in shoulder season).",
+          "pv_cool_demand_max": "Raised demand ceiling while cooling under sustained PV surplus — the compressor may run a few Hz harder because the sun pays for it. Falls back to the normal demand max the moment surplus drops.",
+          "pv_cool_soc_min": "A separate, lower battery state-of-charge gate for the cool ceiling lift — on a hot noon you want to dump surplus straight into cooling rather than wait for a full battery. Ignored when no SoC sensor is set.",
           "ac_setpoint_strategy": "\"Boost\" ramps the AC setpoint toward the device limit (legacy). \"Offset\" shifts the comfort target by at most the offsets below, letting an inverter modulate gently. TRV/underfloor heating is unaffected.",
           "ac_cool_offset_max": "At full demand, cool to this many K below the cool target.",
           "ac_heat_offset_max": "At full demand, AC-heat to this many K above the heat target."
