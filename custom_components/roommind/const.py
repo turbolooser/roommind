@@ -121,8 +121,18 @@ DEFAULT_PV_BOOST_COOL_PERCENT = 15  # %-points added to demand while cooling
 DEFAULT_PV_BOOST_HEAT_PERCENT = 10  # %-points added to demand while heating
 # Outdoor-temp feedforward: heat pumps lose capacity when cold → need a higher
 # compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,
-# evaluated highest-first. Mirrors the field-tuned legacy curve.
+# evaluated highest-first. Mirrors the field-tuned legacy curve. HEATING ONLY.
 DEMAND_FEEDFORWARD_CURVE = ((12.0, 30), (8.0, 35), (4.0, 45), (0.0, 55), (-999.0, 70))
+# Cooling demand model — deliberately just ONE lever. The demand select is only
+# a *power cap* on the compressor group; the MPC regulates comfort via the AC
+# setpoint. So the cap only has to "open on demand, close at rest", and the
+# demand shows up directly as room overshoot — no weather feedforward, no PV
+# boost needed. cap = clamp(FLOOR + SLOPE·Σδ), where Σδ is the summed °C of
+# room overshoot (cur − target) across active cooling zones.
+#   FLOOR = resting cap when every room is at/under target (efficient idle)
+#   SLOPE = added %-points per 1 °C of total overshoot (how hard it ramps up)
+DEMAND_COOL_FLOOR = 40
+DEMAND_COOL_SLOPE = 25
 
 # Update interval in seconds
 UPDATE_INTERVAL = 30

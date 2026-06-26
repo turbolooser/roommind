@@ -331,13 +331,16 @@ def _cool_room_states(delta_pos: float = 0.0):
     }
 
 
+# PV boost is heating-only now (cooling uses the linear room-overshoot model
+# and ignores it), so the PV-gate tests exercise the heating branch. Heat curve
+# at the default outdoor 10 °C → base 35; pv_boost_heat_percent = 10.
 @pytest.mark.asyncio
 async def test_pv_boost_disabled_no_effect(hass, mock_config_entry):
     """pv_boost_enabled=False → byte-identical to the legacy controller."""
     s = dict(_PV_BASE, pv_boost_enabled=False)
     c = _setup(hass, mock_config_entry, sel_current="30")
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), s)
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=1.0), _rooms(), s)
     # Σδ 1.0 → trim +15 → 35+15=50. No boost on top.
     calls = _demand_calls(hass)
     assert calls and calls[0][0][2]["option"] == "50"
@@ -346,25 +349,25 @@ async def test_pv_boost_disabled_no_effect(hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
-async def test_pv_boost_warming_up_then_engages_cooling(hass, mock_config_entry):
-    """First cycle starts the timer (boost=0); after duration elapsed → cool_percent."""
+async def test_pv_boost_warming_up_then_engages_heating(hass, mock_config_entry):
+    """First cycle starts the timer (boost=0); after duration elapsed → heat_percent."""
     c = _setup(hass, mock_config_entry, sel_current="30")
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
     # Cycle 1: conditions met but warming up → no boost yet.
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), _PV_BASE)
     assert c._demand_debug[GID]["pv_boost"] == 0
     assert c._demand_debug[GID]["pv_reason"] == "warming_up"
     assert GID in c._group_pv_boost_since  # timer running
 
-    # Force the timer to look elapsed → boost engages with cool_percent.
+    # Force the timer to look elapsed → boost engages with heat_percent.
     c._group_pv_boost_since[GID] = time.monotonic() - (30 * 60 + 1)
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
-    assert c._demand_debug[GID]["pv_boost"] == 15
-    assert c._demand_debug[GID]["pv_reason"] == "cool"
-    # base 35 + boost 15 = 50.
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 10
+    assert c._demand_debug[GID]["pv_reason"] == "heat"
+    # base 35 + boost 10 = 45.
     calls = _demand_calls(hass)
-    assert calls and calls[0][0][2]["option"] == "50"
+    assert calls and calls[-1][0][2]["option"] == "45"
 
 
 @pytest.mark.asyncio
@@ -384,7 +387,7 @@ async def test_pv_boost_surplus_drop_resets_immediately(hass, mock_config_entry)
     c = _setup(hass, mock_config_entry, sel_current="50")
     c._group_pv_boost_since[GID] = time.monotonic() - 3600  # was armed long ago
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "50", PV_SENSOR: "200", SOC_SENSOR: "100"}))
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), _PV_BASE)
     assert c._demand_debug[GID]["pv_boost"] == 0
     assert c._demand_debug[GID]["pv_reason"] == "surplus_low"
     assert GID not in c._group_pv_boost_since
@@ -395,7 +398,7 @@ async def test_pv_boost_soc_gate_blocks(hass, mock_config_entry):
     """SoC below min while surplus is plenty → boost stays off."""
     c = _setup(hass, mock_config_entry, sel_current="30")
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "70"}))
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), _PV_BASE)
     assert c._demand_debug[GID]["pv_boost"] == 0
     assert c._demand_debug[GID]["pv_reason"] == "soc_low"
     assert GID not in c._group_pv_boost_since
@@ -408,9 +411,9 @@ async def test_pv_boost_no_soc_sensor_skips_soc_check(hass, mock_config_entry):
     c = _setup(hass, mock_config_entry, sel_current="30")
     c._group_pv_boost_since[GID] = time.monotonic() - 3600
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000"}))
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), s)
-    assert c._demand_debug[GID]["pv_boost"] == 15
-    assert c._demand_debug[GID]["pv_reason"] == "cool"
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), s)
+    assert c._demand_debug[GID]["pv_boost"] == 10
+    assert c._demand_debug[GID]["pv_reason"] == "heat"
 
 
 @pytest.mark.asyncio
@@ -431,7 +434,7 @@ async def test_pv_boost_invalid_sensor_state(hass, mock_config_entry):
     c = _setup(hass, mock_config_entry, sel_current="30")
     c._group_pv_boost_since[GID] = time.monotonic() - 3600
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "unavailable", SOC_SENSOR: "100"}))
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=0.0), _rooms(), _PV_BASE)
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=0.0), _rooms(), _PV_BASE)
     assert c._demand_debug[GID]["pv_boost"] == 0
     assert c._demand_debug[GID]["pv_reason"] == "sensor_invalid"
 
@@ -443,8 +446,25 @@ async def test_pv_boost_clamps_to_demand_max(hass, mock_config_entry):
     c = _setup(hass, mock_config_entry, sel_current="30")
     c._group_pv_boost_since[GID] = time.monotonic() - 3600
     hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
-    # delta=2.0 → trim +25, plus boost +15 → raw 75 → clamp 70.
-    await c._async_apply_group_demand(_cool_room_states(delta_pos=2.0), _rooms(), s)
+    # heating: base 35 + trim +25 (Σ2.0) + boost +10 → raw 70 → clamp 70.
+    await c._async_apply_group_demand(_room_states(mode="heating", delta=2.0), _rooms(), s)
     calls = _demand_calls(hass)
     assert calls and calls[0][0][2]["option"] == "70"
-    assert c._demand_debug[GID]["pv_boost"] == 15
+    assert c._demand_debug[GID]["pv_boost"] == 10
+
+
+@pytest.mark.asyncio
+async def test_pv_boost_skipped_while_cooling(hass, mock_config_entry):
+    """Cooling uses the linear room-overshoot model → PV boost never applies,
+    even with ample surplus and a full battery; the gate timer is cleared too.
+    """
+    c = _setup(hass, mock_config_entry, sel_current="30")
+    c._group_pv_boost_since[GID] = time.monotonic() - 3600  # armed from a prior heat cycle
+    hass.states.get = MagicMock(side_effect=_state_router({SEL: "30", PV_SENSOR: "5000", SOC_SENSOR: "100"}))
+    await c._async_apply_group_demand(_cool_room_states(delta_pos=1.0), _rooms(), _PV_BASE)
+    assert c._demand_debug[GID]["pv_boost"] == 0
+    assert c._demand_debug[GID]["pv_reason"] == "cooling"
+    assert GID not in c._group_pv_boost_since  # timer cleared while cooling
+    # cap = FLOOR 40 + SLOPE 25·1.0 = 65, no boost.
+    calls = _demand_calls(hass)
+    assert calls and calls[-1][0][2]["option"] == "65"

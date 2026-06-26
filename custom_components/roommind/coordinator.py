@@ -2132,7 +2132,15 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 group_mode = MODE_HEATING
             else:
                 group_mode = None
-            pv_boost, pv_reason = self._compute_pv_boost(gid, group_mode, settings, now)
+            if group_mode == MODE_COOLING:
+                # Cooling demand is the linear room-overshoot model
+                # (FLOOR + SLOPE·Σδ); PV boost is heating-only now. Skip the
+                # gate and clear its timer so it re-arms cleanly if heating
+                # resumes.
+                pv_boost, pv_reason = 0, "cooling"
+                self._group_pv_boost_since.pop(gid, None)
+            else:
+                pv_boost, pv_reason = self._compute_pv_boost(gid, group_mode, settings, now)
 
             result = compute_demand(
                 self.outdoor_temp_effective,
@@ -2140,6 +2148,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 demand_min,
                 demand_max,
                 pv_boost=pv_boost,
+                mode=group_mode,
             )
             raw_target = result.percent
 
