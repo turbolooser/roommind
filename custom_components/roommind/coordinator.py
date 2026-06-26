@@ -2199,6 +2199,17 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 self._group_demand_downhold.pop(gid, None)
                 target = raw_target
 
+            # A ceiling *reduction* must apply immediately, bypassing the
+            # down-slew. The slew above guards against Σδ-driven flapping — but
+            # when the cool ceiling drops (PV surplus gone → effective_demand_max
+            # 100→95), holding the old 100 would keep the compressor running on
+            # grid/battery after the sun is gone (energy waste). So never let the
+            # held target exceed the *current* ceiling; the slew still governs
+            # Σδ-driven step-downs within it.
+            if target > effective_demand_max:
+                target = effective_demand_max
+                slew_reason = "ceiling_drop"
+
             # Self-correcting hold gate: decide against the *actual* device
             # state, not RoomMind's last intent — a select that drifted away
             # on its own (or that we are deliberately holding high via the
