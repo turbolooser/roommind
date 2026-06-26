@@ -31,7 +31,6 @@ from .const import (
     DEFAULT_PV_BOOST_ENABLED,
     DEFAULT_PV_BOOST_HEAT_PERCENT,
     DEFAULT_PV_COOL_DEMAND_MAX,
-    DEFAULT_PV_COOL_SOC_MIN,
     DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES,
     DEFAULT_PV_SURPLUS_MIN_W,
     DEFAULT_VACATION_ACTION,
@@ -99,7 +98,6 @@ class RoomMindOptionsFlow(OptionsFlow):
                         "pv_boost_cool_percent": user_input["pv_boost_cool_percent"],
                         "pv_boost_heat_percent": user_input["pv_boost_heat_percent"],
                         "pv_cool_demand_max": user_input["pv_cool_demand_max"],
-                        "pv_cool_soc_min": user_input["pv_cool_soc_min"],
                         "ac_setpoint_strategy": user_input["ac_setpoint_strategy"],
                         "ac_cool_offset_max": user_input["ac_cool_offset_max"],
                         "ac_heat_offset_max": user_input["ac_heat_offset_max"],
@@ -130,7 +128,6 @@ class RoomMindOptionsFlow(OptionsFlow):
         current_pv_boost_cool = settings.get("pv_boost_cool_percent", DEFAULT_PV_BOOST_COOL_PERCENT)
         current_pv_boost_heat = settings.get("pv_boost_heat_percent", DEFAULT_PV_BOOST_HEAT_PERCENT)
         current_pv_cool_demand_max = settings.get("pv_cool_demand_max", DEFAULT_PV_COOL_DEMAND_MAX)
-        current_pv_cool_soc_min = settings.get("pv_cool_soc_min", DEFAULT_PV_COOL_SOC_MIN)
         current_sp_strategy = settings.get("ac_setpoint_strategy", DEFAULT_AC_SETPOINT_STRATEGY)
         current_cool_offset = settings.get("ac_cool_offset_max", DEFAULT_AC_COOL_OFFSET_MAX)
         current_heat_offset = settings.get("ac_heat_offset_max", DEFAULT_AC_HEAT_OFFSET_MAX)
@@ -245,11 +242,6 @@ class RoomMindOptionsFlow(OptionsFlow):
                     )
                 ),
                 vol.Required("pv_cool_demand_max", default=current_pv_cool_demand_max): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=100, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
-                    )
-                ),
-                vol.Required("pv_cool_soc_min", default=current_pv_cool_soc_min): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=100, step=5, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
                     )
