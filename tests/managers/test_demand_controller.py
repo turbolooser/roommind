@@ -140,6 +140,52 @@ def test_cooling_sign_is_caller_supplied():
     assert compute_demand_percent(10.0, [1.0], 30, 95) == 50
 
 
+@pytest.mark.parametrize(
+    ("total_delta", "expected"),
+    [
+        (-0.4, 30),  # rooms under target → clamp down to demand_min
+        (0.0, 40),  # at target → resting floor
+        (0.5, 50),  # 40 + 25·0.5 = 52.5 → snap 50
+        (1.0, 65),  # 40 + 25 = 65 (DG 1° over: was 45 with the broken curve)
+        (1.48, 75),  # 40 + 37 = 77 → snap 75 (live 3-room snapshot)
+        (2.0, 90),  # 40 + 50 = 90
+        (2.5, 95),  # 40 + 62.5 = 102.5 → clamp demand_max
+    ],
+)
+def test_cool_linear_model(total_delta, expected):
+    """Cooling is one lever: cap = clamp(FLOOR 40 + SLOPE 25·Σδ).
+
+    Outdoor temp is irrelevant — the cap tracks room overshoot directly.
+    """
+    res = compute_demand(23.6, [total_delta], 30, 95, mode="cooling")
+    assert res.base == 40  # flat resting floor (no weather feedforward)
+    assert res.percent == expected
+    # Same result whatever the outdoor temp — proves the feedforward is gone.
+    assert compute_demand_percent(33.0, [total_delta], 30, 95, mode="cooling") == expected
+
+
+def test_cool_ignores_pv_boost():
+    """PV boost is heating-only now → ignored (and zeroed) while cooling."""
+    res = compute_demand(23.6, [1.0], 30, 95, mode="cooling", pv_boost=40)
+    assert res.pv_boost == 0
+    assert res.percent == 65  # 40 + 25, boost makes no difference
+
+
+def test_cool_lifts_cap_where_broken_heat_curve_pinned_to_floor():
+    """Regression for 'RM won't cool properly': the heat curve floored the
+    cooling base at 30 → cap stuck at 45; the linear model lifts it to 75.
+    """
+    deltas = [1.05, 0.05, 0.38]  # field snapshot: Σδ ≈ 1.48
+    assert compute_demand_percent(24.0, deltas, 30, 95) == 45  # heat curve (bug)
+    assert compute_demand_percent(24.0, deltas, 30, 95, mode="cooling") == 75
+
+
+def test_heating_and_default_mode_keep_heat_curve():
+    """mode None or heating → unchanged heat-curve base (byte-identical)."""
+    assert compute_demand(24.0, [0.0], 30, 95).base == 30  # default
+    assert compute_demand(24.0, [0.0], 30, 95, mode="heating").base == 30
+
+
 def test_pv_boost_added_on_top_of_base_and_trim():
     """pv_boost stacks with base + trim, then clamps to demand_max."""
     # Mild weather (base 35), zone at target (no trim), boost +15 → 50.
