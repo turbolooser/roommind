@@ -119,6 +119,15 @@ DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES = 30  # for this long → anti-flap
 DEFAULT_PV_BATTERY_SOC_MIN = 90  # %; only checked when SoC sensor is set
 DEFAULT_PV_BOOST_COOL_PERCENT = 15  # %-points added to demand while cooling
 DEFAULT_PV_BOOST_HEAT_PERCENT = 10  # %-points added to demand while heating
+# PV surplus → raise the *cooling* ceiling instead of adding an additive boost.
+# The additive cool boost above verpufft once base+slope already pin the cap to
+# demand_max; what actually buys head-room on a heatwave is lifting the ceiling
+# itself, letting the compressor run a few Hz harder while the sun pays for it.
+# Only applied while cooling + surplus gate satisfied; falls back to demand_max
+# the moment surplus drops. Uses its own, lower SoC gate — on a 37 °C noon you
+# want to dump the sun straight into cooling, not wait for a 90 %-full battery.
+DEFAULT_PV_COOL_DEMAND_MAX = 100  # % ceiling while cooling under PV surplus
+DEFAULT_PV_COOL_SOC_MIN = 60  # %; lower SoC gate for the cool ceiling lift
 # Outdoor-temp feedforward: heat pumps lose capacity when cold → need a higher
 # compressor cap for the same delivered heat. (t_out_below °C, base %) pairs,
 # evaluated highest-first. Mirrors the field-tuned legacy curve. HEATING ONLY.
@@ -132,8 +141,21 @@ DEMAND_FEEDFORWARD_CURVE = ((12.0, 30), (8.0, 35), (4.0, 45), (0.0, 55), (-999.0
 # room nears target, but on a hot day the heat ingress doesn't stop → the room
 # can never quite reach target (the top-floor-at-30° case). The floor keeps the
 # cap high enough to hold, even at Σδ≈0. (t_out_above °C, floor %) pairs,
-# highest-first. 29°→70 is field-measured (cap 90 cooled DG, 65 didn't).
-DEMAND_COOL_FLOOR_CURVE = ((29.0, 70), (27.0, 62), (25.0, 54), (23.0, 46), (-999.0, 40))
+# highest-first. 29°→70 is field-measured (cap 90 cooled DG, 65 didn't). The
+# >31/>33 points lift the floor into heatwave territory so that — with any real
+# Σδ — the cap pins stably to demand_max (95) instead of hovering at 90 and
+# flapping against the hysteresis band. The biggest indoor head (DG) then gets
+# the refrigerant it needs; the device still self-throttles via the setpoint
+# once a zone reaches target, so a high floor at Σδ≈0 costs nothing.
+DEMAND_COOL_FLOOR_CURVE = (
+    (33.0, 90),
+    (31.0, 80),
+    (29.0, 70),
+    (27.0, 62),
+    (25.0, 54),
+    (23.0, 46),
+    (-999.0, 40),
+)
 DEMAND_COOL_SLOPE = 25  # added %-points per 1 °C of total room overshoot
 
 # AC inverter setpoint strategy (cooling + AC heating; TRV/UFH unaffected).

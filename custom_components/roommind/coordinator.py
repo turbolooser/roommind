@@ -38,6 +38,8 @@ from .const import (
     DEFAULT_PV_BOOST_COOL_PERCENT,
     DEFAULT_PV_BOOST_ENABLED,
     DEFAULT_PV_BOOST_HEAT_PERCENT,
+    DEFAULT_PV_COOL_DEMAND_MAX,
+    DEFAULT_PV_COOL_SOC_MIN,
     DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES,
     DEFAULT_PV_SURPLUS_MIN_W,
     DEFAULT_VACATION_ACTION,
@@ -2044,47 +2046,48 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 exc_info=True,
             )
 
-    def _compute_pv_boost(
+    def _pv_surplus_active(
         self,
         gid: str,
         mode_active: str | None,
         settings: dict,
         now: float,
-    ) -> tuple[int, str]:
-        """Resolve the PV-surplus boost (%-points) for one compressor group.
+        soc_min: float,
+    ) -> tuple[bool, str]:
+        """Shared PV-surplus gate for one compressor group.
 
-        Returns ``(boost, reason)`` where ``boost`` is the %-points to add on
-        top of base + adjustment in ``compute_demand``. ``reason`` is a short
-        tag for the diagnostic sensor / logs:
+        Returns ``(active, reason)``. ``reason`` is a short tag for the
+        diagnostic sensor / logs:
 
         - ``disabled``      — pv_boost_enabled off, or no surplus sensor set
         - ``no_active``     — group has no active heating/cooling zone
         - ``surplus_low``   — surplus_w below threshold
-        - ``soc_low``       — battery SoC below threshold
+        - ``soc_low``       — battery SoC below ``soc_min``
         - ``sensor_invalid``— surplus / SoC sensor missing or non-numeric
         - ``warming_up``    — gate satisfied but sustained-duration not yet met
-        - ``cool`` / ``heat`` — boost active for the named mode
+        - ``active``        — all gates passed for the sustained duration
 
-        Rise gate is gated by *sustained* duration (anti-flap). Fall is
-        immediate: any miss resets the timer so the very next miss tick
-        already returns zero. Matches the down-only flap protection of the
-        wider demand controller — we never want to clamp the cap *higher*
-        than reality based on a stale "things looked sunny 30 min ago".
+        The ``soc_min`` is passed in by the caller so the heat boost and the
+        cool ceiling lift can apply different SoC thresholds against the same
+        surplus/duration timer. Rise is gated by *sustained* duration
+        (anti-flap); any miss resets the timer so the very next miss tick
+        already reports inactive — we never want to hold the cap higher than
+        reality on a stale "things looked sunny 30 min ago".
         """
         if not settings.get("pv_boost_enabled", DEFAULT_PV_BOOST_ENABLED):
             self._group_pv_boost_since.pop(gid, None)
-            return 0, "disabled"
+            return False, "disabled"
 
         surplus_eid = settings.get("pv_surplus_sensor")
         if not surplus_eid:
             self._group_pv_boost_since.pop(gid, None)
-            return 0, "disabled"
+            return False, "disabled"
 
-        # No active zone → no work to boost; reset timer so the next active
+        # No active zone → nothing to lift; reset timer so the next active
         # cycle starts fresh (we don't reward "sat in idle through the sun").
         if mode_active is None:
             self._group_pv_boost_since.pop(gid, None)
-            return 0, "no_active"
+            return False, "no_active"
 
         surplus_state = self.hass.states.get(surplus_eid)
         try:
@@ -2093,12 +2096,12 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             surplus_w = float("nan")
         if surplus_w != surplus_w:  # NaN check
             self._group_pv_boost_since.pop(gid, None)
-            return 0, "sensor_invalid"
+            return False, "sensor_invalid"
 
         min_w = float(settings.get("pv_surplus_min_w", DEFAULT_PV_SURPLUS_MIN_W))
         if surplus_w < min_w:
             self._group_pv_boost_since.pop(gid, None)
-            return 0, "surplus_low"
+            return False, "surplus_low"
 
         soc_eid = settings.get("pv_battery_soc_sensor")
         if soc_eid:
@@ -2109,19 +2112,36 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 soc = float("nan")
             if soc != soc:
                 self._group_pv_boost_since.pop(gid, None)
-                return 0, "sensor_invalid"
-            soc_min = float(settings.get("pv_battery_soc_min", DEFAULT_PV_BATTERY_SOC_MIN))
+                return False, "sensor_invalid"
             if soc < soc_min:
                 self._group_pv_boost_since.pop(gid, None)
-                return 0, "soc_low"
+                return False, "soc_low"
 
         duration_s = (
             float(settings.get("pv_surplus_min_duration_minutes", DEFAULT_PV_SURPLUS_MIN_DURATION_MINUTES)) * 60.0
         )
         start = self._group_pv_boost_since.setdefault(gid, now)
         if now - start < duration_s:
-            return 0, "warming_up"
+            return False, "warming_up"
+        return True, "active"
 
+    def _compute_pv_boost(
+        self,
+        gid: str,
+        mode_active: str | None,
+        settings: dict,
+        now: float,
+    ) -> tuple[int, str]:
+        """Resolve the PV-surplus boost (%-points) added on top of base +
+        adjustment in ``compute_demand`` (heating path). Cooling uses a ceiling
+        lift instead (see ``_async_apply_group_demand``), not this additive
+        boost. ``reason`` is ``cool`` / ``heat`` when active, else the gate tag
+        from :meth:`_pv_surplus_active`.
+        """
+        soc_min = float(settings.get("pv_battery_soc_min", DEFAULT_PV_BATTERY_SOC_MIN))
+        active, reason = self._pv_surplus_active(gid, mode_active, settings, now, soc_min)
+        if not active:
+            return 0, reason
         if mode_active == MODE_COOLING:
             return int(settings.get("pv_boost_cool_percent", DEFAULT_PV_BOOST_COOL_PERCENT)), "cool"
         return int(settings.get("pv_boost_heat_percent", DEFAULT_PV_BOOST_HEAT_PERCENT)), "heat"
@@ -2201,13 +2221,22 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 group_mode = MODE_HEATING
             else:
                 group_mode = None
+            effective_demand_max = demand_max
             if group_mode == MODE_COOLING:
                 # Cooling demand is the linear room-overshoot model
-                # (FLOOR + SLOPE·Σδ); PV boost is heating-only now. Skip the
-                # gate and clear its timer so it re-arms cleanly if heating
-                # resumes.
-                pv_boost, pv_reason = 0, "cooling"
-                self._group_pv_boost_since.pop(gid, None)
+                # (FLOOR + SLOPE·Σδ); the additive PV boost is heating-only (it
+                # verpufft once base+slope pin the cap to demand_max). Instead,
+                # a sustained PV surplus *lifts the ceiling* from demand_max to
+                # pv_cool_demand_max, letting the compressor run a few Hz harder
+                # while the sun pays for it. Uses its own lower SoC gate.
+                pv_boost = 0
+                cool_soc_min = float(settings.get("pv_cool_soc_min", DEFAULT_PV_COOL_SOC_MIN))
+                surplus_on, pv_reason = self._pv_surplus_active(gid, group_mode, settings, now, cool_soc_min)
+                if surplus_on:
+                    pv_cool_max = int(settings.get("pv_cool_demand_max", DEFAULT_PV_COOL_DEMAND_MAX))
+                    if pv_cool_max > effective_demand_max:
+                        effective_demand_max = pv_cool_max
+                        pv_reason = "cool_ceiling"
             else:
                 pv_boost, pv_reason = self._compute_pv_boost(gid, group_mode, settings, now)
 
@@ -2215,7 +2244,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 self.outdoor_temp_effective,
                 active_deltas,
                 demand_min,
-                demand_max,
+                effective_demand_max,
                 pv_boost=pv_boost,
                 mode=group_mode,
             )
@@ -2308,6 +2337,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 "outdoor": self.outdoor_temp_effective,
                 "demand_min": demand_min,
                 "demand_max": demand_max,
+                "demand_max_eff": effective_demand_max,
             }
 
             applied = False
