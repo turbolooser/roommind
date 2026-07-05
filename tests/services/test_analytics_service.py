@@ -143,19 +143,16 @@ class TestComputeTargetForecast:
             assert result[0]["target_temp"] == 21.0
 
     @pytest.mark.asyncio
-    async def test_override_targets_passed_to_resolver(self):
-        """override_heat/override_cool from the room flow into the resolver call."""
+    async def test_auto_mode_prefer_cool_shows_cool_target(self):
+        """auto mode + prefer_cool -> chart target = cool_target (cooling season)."""
         hass = MagicMock()
         hass.config.units.temperature_unit = "°C"
         room = {
-            "comfort_heat": 21.0,
-            "comfort_cool": 24.0,
+            "comfort_heat": 20.0,
+            "comfort_cool": 22.0,
             "eco_heat": 17.0,
             "eco_cool": 27.0,
             "climate_mode": "auto",
-            "override_heat": 19.5,
-            "override_cool": 23.5,
-            "override_until": None,
         }
         settings = {}
 
@@ -172,19 +169,49 @@ class TestComputeTargetForecast:
             ),
             patch(
                 "custom_components.roommind.utils.schedule_utils.resolve_targets_at_time",
-                return_value=TargetTemps(heat=19.5, cool=23.5),
-            ) as mock_resolve,
+                return_value=TargetTemps(heat=20.0, cool=22.0),
+            ),
         ):
-            await _compute_target_forecast(
-                hass,
-                room,
-                settings,
-                hours=0.0,
-                interval_minutes=5,
+            result = await _compute_target_forecast(
+                hass, room, settings, hours=0.0, interval_minutes=5, prefer_cool=True
             )
-            args = mock_resolve.call_args[0]
-            assert args[3] == 19.5
-            assert args[4] == 23.5
+            assert result[0]["target_temp"] == 22.0
+            # heat/cool targets still both available for the MPC simulator
+            assert result[0]["heat_target"] == 20.0
+            assert result[0]["cool_target"] == 22.0
+
+    @pytest.mark.asyncio
+    async def test_auto_mode_default_shows_heat_target(self):
+        """auto mode without prefer_cool -> chart target = heat_target (default)."""
+        hass = MagicMock()
+        hass.config.units.temperature_unit = "°C"
+        room = {
+            "comfort_heat": 20.0,
+            "comfort_cool": 22.0,
+            "eco_heat": 17.0,
+            "eco_cool": 27.0,
+            "climate_mode": "auto",
+        }
+        settings = {}
+
+        from custom_components.roommind.const import TargetTemps
+
+        with (
+            patch(
+                "custom_components.roommind.utils.presence_utils.is_presence_away",
+                return_value=False,
+            ),
+            patch(
+                "custom_components.roommind.utils.schedule_utils.get_active_schedule_entity",
+                return_value=None,
+            ),
+            patch(
+                "custom_components.roommind.utils.schedule_utils.resolve_targets_at_time",
+                return_value=TargetTemps(heat=20.0, cool=22.0),
+            ),
+        ):
+            result = await _compute_target_forecast(hass, room, settings, hours=0.0, interval_minutes=5)
+            assert result[0]["target_temp"] == 20.0
 
     @pytest.mark.asyncio
     async def test_cache_keeps_forecast_when_service_fails(self):
