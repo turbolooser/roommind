@@ -6,12 +6,33 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.roommind.const import MODE_COOLING, MODE_HEATING, MODE_IDLE
 from custom_components.roommind.control.mpc_controller import (
     MPCController,
+    season_prefers_cool,
 )
 from custom_components.roommind.control.thermal_model import RCModel, RoomModelManager
 
 from .conftest import build_hass, make_room
+
+
+class TestSeasonPrefersCool:
+    """season_prefers_cool: season-aware single-setpoint direction."""
+
+    def test_last_active_cooling_wins_even_when_both_allowed(self):
+        assert season_prefers_cool(MODE_COOLING, can_heat=True, can_cool=True) is True
+
+    def test_last_active_heating_wins_even_when_both_allowed(self):
+        assert season_prefers_cool(MODE_HEATING, can_heat=True, can_cool=True) is False
+
+    def test_no_history_cool_only_gate(self):
+        assert season_prefers_cool(MODE_IDLE, can_heat=False, can_cool=True) is True
+
+    def test_no_history_heat_only_gate(self):
+        assert season_prefers_cool(None, can_heat=True, can_cool=False) is False
+
+    def test_ambiguous_defaults_to_heat(self):
+        assert season_prefers_cool(None, can_heat=True, can_cool=True) is False
 
 
 @pytest.mark.asyncio
