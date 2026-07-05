@@ -71,6 +71,7 @@ from .control.mpc_controller import (
     check_acs_can_heat,
     get_can_heat_cool,
     is_mpc_active,
+    season_prefers_cool,
 )
 from .control.solar import compute_q_solar_norm
 from .control.thermal_model import RoomModelManager
@@ -169,6 +170,9 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         self._outdoor_warning_sent: bool = False
         self._window_manager = WindowManager()
         self._previous_modes: dict[str, str] = {}
+        # Last actively-conditioned direction per room (heating/cooling only),
+        # used to keep the idle display target on the right season.
+        self._last_active_mode: dict[str, str] = {}
         self._model_manager: RoomModelManager = RoomModelManager()
         self._model_loaded = False
         self._thermal_save_count: int = 0
@@ -722,19 +726,31 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         )
         mode, power_fraction = await controller.async_evaluate(current_temp, targets)
 
+        # Capability/season gate for the idle display target (see
+        # _idle_display_target). Cheap pure call, kept local to the display so
+        # the change stays isolated from the control path.
+        can_heat, can_cool = get_can_heat_cool(
+            room,
+            self.outdoor_temp_effective,
+            acs_can_heat=check_acs_can_heat(self.hass, room),
+            override_active=is_override_active(room),
+        )
+
         # Compute effective single target_temp for display/history (mode + climate_mode aware)
         climate_mode = room.get("climate_mode", "auto")
         if climate_mode == CLIMATE_MODE_COOL_ONLY:
             target_temp = targets.cool
         elif climate_mode == CLIMATE_MODE_HEAT_ONLY:
             target_temp = targets.heat
-        else:  # auto
-            if mode == MODE_HEATING and targets.heat is not None:
-                target_temp = targets.heat
-            elif mode == MODE_COOLING and targets.cool is not None:
-                target_temp = targets.cool
-            else:
-                target_temp = targets.heat if targets.heat is not None else targets.cool
+        elif mode == MODE_HEATING and targets.heat is not None:
+            target_temp = targets.heat
+        elif mode == MODE_COOLING and targets.cool is not None:
+            target_temp = targets.cool
+        else:
+            # Idle in auto mode: no single active setpoint. Show the season-
+            # correct target instead of naively snapping to comfort_heat, which
+            # square-waves the display down during cooling season.
+            target_temp = self._idle_display_target(area_id, targets, can_heat, can_cool)
 
         # Force idle when target resolved to "off" (presence away or schedule off)
         if force_off:
@@ -1201,6 +1217,10 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         elif mode == MODE_IDLE:
             self._mode_on_since.pop(area_id, None)
         self._previous_modes[area_id] = mode
+        # Remember the last actively-conditioned direction (not idle) so the
+        # idle display target stays on the right season. See _idle_display_target.
+        if mode in (MODE_HEATING, MODE_COOLING):
+            self._last_active_mode[area_id] = mode
 
         # Compute display mode: show actual device state when RoomMind doesn't
         # directly control the device, without affecting internal tracking
@@ -1541,6 +1561,29 @@ class RoomMindCoordinator(DataUpdateCoordinator):
 
         return resolve_schedule_index(self.hass, room)
 
+    def _idle_display_target(
+        self,
+        area_id: str,
+        targets: TargetTemps,
+        can_heat: bool,
+        can_cool: bool,
+    ) -> float | None:
+        """Pick the setpoint to display while idle in auto climate_mode.
+
+        While idle there is no single active setpoint — both the heating and
+        cooling targets apply. Naively showing comfort_heat makes the displayed
+        target snap down on every idle gap during cooling season, which reads
+        as the room flapping between heat and cool. Show the season-correct
+        direction instead (shared with the analytics forecast via
+        ``season_prefers_cool``).
+        """
+        prefer_cool = season_prefers_cool(self._last_active_mode.get(area_id), can_heat, can_cool)
+        if prefer_cool and targets.cool is not None:
+            return targets.cool
+        if not prefer_cool and targets.heat is not None:
+            return targets.heat
+        return targets.heat if targets.heat is not None else targets.cool
+
     def _resolve_target_temps(
         self,
         room: dict,
@@ -1770,6 +1813,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         # Clean up in-memory state
         self._window_manager.remove_room(area_id)
         self._previous_modes.pop(area_id, None)
+        self._last_active_mode.pop(area_id, None)
         self._last_valid_temps.pop(area_id, None)
         self._had_valid_temp.discard(area_id)
         self._startup_guard_warned.discard(area_id)
