@@ -249,12 +249,18 @@ class TestVacationMode:
 
     @pytest.mark.asyncio
     async def test_override_beats_vacation_off(self, hass, mock_config_entry):
-        """Manual override still takes priority over vacation_action='off'."""
+        """Manual override still takes priority over vacation_action='off'.
+
+        Post-#313 the override is expressed as split heat/cool targets; the
+        override is resolved before the vacation branch, so it must win over the
+        vacation-off frost floor.
+        """
         room = {
             **SAMPLE_ROOM,
-            "override_temp": 25.0,
+            "override_heat": 25.0,
+            "override_cool": 25.0,
             "override_until": time.time() + 3600,
-            "override_type": "boost",
+            "override_type": "custom",
         }
         store = _make_store_mock({"living_room_abc12345": room})
         store.get_settings.return_value = {
@@ -270,7 +276,8 @@ class TestVacationMode:
         data = await coordinator._async_update_data()
 
         room_state = data["rooms"]["living_room_abc12345"]
-        assert room_state["target_temp"] == 25.0
+        assert room_state["heat_target"] == 25.0  # override wins over vacation-off frost (7.0)
+        assert room_state["cool_target"] == 25.0
 
 
 class TestSplitOverrideResolution:
