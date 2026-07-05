@@ -693,20 +693,39 @@ def get_can_heat_cool(
     return can_heat, can_cool
 
 
-def season_prefers_cool(last_active_mode: str | None, can_heat: bool, can_cool: bool) -> bool:
+def season_prefers_cool(
+    last_active_mode: str | None,
+    can_heat: bool,
+    can_cool: bool,
+    current_temp: float | None = None,
+    heat_target: float | None = None,
+    cool_target: float | None = None,
+) -> bool:
     """Whether a room's current season/direction is cooling.
 
     Single source of truth for the season-aware single setpoint shown by the
     live ``target_temp`` sensor (idle) and the analytics target forecast, so
-    they never disagree. Prefers the last actively-conditioned direction
-    (stable across idle gaps); falls back to the capability/season gate,
-    defaulting to heating when ambiguous.
+    they never disagree. Decision order:
+
+    1. Last actively-conditioned direction (stable across idle gaps).
+    2. One-sided capability/season gate (cool-only / heat-only).
+    3. Ambiguous (both or neither allowed, no recent direction): show the
+       setpoint the room is sitting *nearest* to, so the display reflects the
+       regime the room is actually in — e.g. a room resting at its cool target
+       on a mild summer evening shows the cool setpoint, not comfort_heat.
+       Falls back to heating only when temps/targets are unavailable.
     """
     if last_active_mode == MODE_COOLING:
         return True
     if last_active_mode == MODE_HEATING:
         return False
-    return bool(can_cool and not can_heat)
+    if can_cool and not can_heat:
+        return True
+    if can_heat and not can_cool:
+        return False
+    if current_temp is not None and heat_target is not None and cool_target is not None:
+        return abs(current_temp - cool_target) <= abs(current_temp - heat_target)
+    return False
 
 
 def is_mpc_active(

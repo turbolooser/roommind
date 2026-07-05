@@ -716,7 +716,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             # Idle in auto mode: no single active setpoint. Show the season-
             # correct target instead of naively snapping to comfort_heat, which
             # square-waves the display down during cooling season.
-            target_temp = self._idle_display_target(area_id, targets, can_heat, can_cool)
+            target_temp = self._idle_display_target(area_id, targets, can_heat, can_cool, current_temp)
 
         # Force idle when target resolved to "off" (presence away or schedule off)
         if force_off:
@@ -1493,6 +1493,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         targets: TargetTemps,
         can_heat: bool,
         can_cool: bool,
+        current_temp: float | None,
     ) -> float | None:
         """Pick the setpoint to display while idle in auto climate_mode.
 
@@ -1501,9 +1502,17 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         target snap down on every idle gap during cooling season, which reads
         as the room flapping between heat and cool. Show the season-correct
         direction instead (shared with the analytics forecast via
-        ``season_prefers_cool``).
+        ``season_prefers_cool``); when the season is ambiguous, the nearest
+        setpoint to ``current_temp`` wins.
         """
-        prefer_cool = season_prefers_cool(self._last_active_mode.get(area_id), can_heat, can_cool)
+        prefer_cool = season_prefers_cool(
+            self._last_active_mode.get(area_id),
+            can_heat,
+            can_cool,
+            current_temp,
+            targets.heat,
+            targets.cool,
+        )
         if prefer_cool and targets.cool is not None:
             return targets.cool
         if not prefer_cool and targets.heat is not None:
