@@ -280,7 +280,12 @@ async def build_analytics_data(
             acs_can_heat=check_acs_can_heat(hass, room_config),
         )
         prefer_cool = season_prefers_cool(
-            getattr(coordinator, "_last_active_mode", {}).get(area_id), can_heat, can_cool
+            getattr(coordinator, "_last_active_mode", {}).get(area_id),
+            can_heat,
+            can_cool,
+            live.get("current_temp"),
+            live.get("heat_target"),
+            live.get("cool_target"),
         )
     try:
         target_forecast = await _compute_target_forecast(
