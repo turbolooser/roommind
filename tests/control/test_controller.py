@@ -34,6 +34,17 @@ class TestSeasonPrefersCool:
     def test_ambiguous_defaults_to_heat(self):
         assert season_prefers_cool(None, can_heat=True, can_cool=True) is False
 
+    def test_ambiguous_nearest_cool(self):
+        # heat 20, cool 24 (midpoint 22); room at 23.5 sits nearer cool.
+        assert season_prefers_cool(None, True, True, 23.5, 20.0, 24.0) is True
+
+    def test_ambiguous_nearest_heat(self):
+        assert season_prefers_cool(None, True, True, 20.5, 20.0, 24.0) is False
+
+    def test_neither_capability_uses_nearest(self):
+        # Hard-blocked both ways, no history → still show the nearest setpoint.
+        assert season_prefers_cool(None, False, False, 23.5, 20.0, 24.0) is True
+
 
 @pytest.mark.asyncio
 async def test_mpc_evaluate_heats_when_cold():
