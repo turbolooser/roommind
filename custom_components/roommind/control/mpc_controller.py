@@ -705,6 +705,22 @@ def get_can_heat_cool(
     return can_heat, can_cool
 
 
+def season_prefers_cool(last_active_mode: str | None, can_heat: bool, can_cool: bool) -> bool:
+    """Whether a room's current season/direction is cooling.
+
+    Single source of truth for the season-aware single setpoint shown by the
+    live ``target_temp`` sensor (idle) and the analytics target forecast, so
+    they never disagree. Prefers the last actively-conditioned direction
+    (stable across idle gaps); falls back to the capability/season gate,
+    defaulting to heating when ambiguous.
+    """
+    if last_active_mode == MODE_COOLING:
+        return True
+    if last_active_mode == MODE_HEATING:
+        return False
+    return bool(can_cool and not can_heat)
+
+
 def is_mpc_active(
     model_manager: RoomModelManager,
     area_id: str,
