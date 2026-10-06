@@ -41,6 +41,9 @@ from .utils.device_utils import (
     DEFAULT_COIL_DRY_FAN_MODE,
     DEFAULT_COIL_DRY_MIN_COOLING_MINUTES,
     DEFAULT_COIL_DRY_MINUTES,
+    IDLE_ACTIONS_BY_TYPE,
+    MAX_IDLE_SETBACK_OFFSET,
+    MIN_IDLE_SETBACK_OFFSET,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,12 +52,25 @@ _LOGGER = logging.getLogger(__name__)
 def _validate_device_idle_action(device: dict) -> dict:
     """Enforce type-specific idle_action constraints.
 
-    idle_action="low" lowers the setpoint to min_temp while keeping the
-    device in its active hvac_mode. For ACs this would cool continuously
-    toward the minimum, which is never the intent. Restrict "low" to TRVs.
+    Checked against the explicit per-type matrix in ``IDLE_ACTIONS_BY_TYPE``
+    rather than by rejecting single bad pairs, so every supported combination is
+    a deliberate, tested one:
+
+    - ``low`` is TRV-only: it lowers the setpoint to min_temp while keeping the
+      device in its active hvac_mode. On an AC that means cooling toward the
+      minimum forever, which is never the intent.
+    - ``fan_only`` is AC-only: a TRV has no fan.
+    - ``setback`` is valid for both. On an AC it keeps circulation alive; on a
+      TRV it keeps a sluggish radiator lukewarm so heat returns immediately
+      instead of after a several-minute reheat.
     """
-    if device.get("type") == "ac" and device.get("idle_action") == "low":
-        raise vol.Invalid("idle_action='low' is only supported for TRVs (type='trv')")
+    dev_type = device.get("type")
+    idle_action = device.get("idle_action")
+    allowed = IDLE_ACTIONS_BY_TYPE.get(dev_type) if isinstance(dev_type, str) else None
+    if allowed is not None and idle_action is not None and idle_action not in allowed:
+        raise vol.Invalid(
+            f"idle_action='{idle_action}' is not supported for type='{dev_type}' (allowed: {', '.join(allowed)})"
+        )
     return device
 
 
@@ -369,6 +385,14 @@ async def websocket_list_rooms(
                     vol.Optional("heating_system_type", default=""): vol.In(["", "radiator", "underfloor"]),
                     vol.Optional("idle_action", default="off"): vol.In(["off", "fan_only", "setback", "low"]),
                     vol.Optional("idle_fan_mode", default="low"): str,
+                    # None / absent inherits the global idle_setback_offset.
+                    vol.Optional("idle_setback_offset", default=None): vol.Any(
+                        None,
+                        vol.All(
+                            vol.Coerce(float),
+                            vol.Range(min=MIN_IDLE_SETBACK_OFFSET, max=MAX_IDLE_SETBACK_OFFSET),
+                        ),
+                    ),
                     vol.Optional("setpoint_mode", default="proportional"): vol.In(["proportional", "direct"]),
                     vol.Optional("coil_dry", default=COIL_DRY_INHERIT): vol.In(COIL_DRY_OVERRIDES),
                     vol.Optional("coil_dry_minutes", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=60)),
