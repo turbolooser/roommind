@@ -252,3 +252,66 @@ def test_get_idle_setback_offset_missing_key_and_unknown_device():
     """Absent key and unknown entity both fall back to the global default."""
     assert get_idle_setback_offset([{"entity_id": "climate.trv1", "type": "trv"}], "climate.trv1", 2.0) == 2.0
     assert get_idle_setback_offset([], "climate.nope", 2.0) == 2.0
+
+
+# ---------------------------------------------------------------------------
+# staged-idle escalation: pins what idle_off_after_minutes = 0 actually means
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_zero_off_after_minutes_keeps_setback_forever():
+    """0 disables the escalation — the setback holds instead of turning off.
+
+    Pinned because the README said the opposite ("0 = immediate off") for a
+    while. For a sluggish radiator 0 is the value you want.
+    """
+    clear_command_cache()
+    _idle_cfg["setback_offset"] = 1.0
+    _idle_cfg["off_after_minutes"] = 0.0
+    hass = build_hass()
+    hass.states.get = MagicMock(return_value=_trv_state("heat", temperature=21.0))
+
+    await async_idle_device(
+        hass,
+        "climate.trv1",
+        _trv(),
+        area_id="bath",
+        targets=TargetTemps(heat=20.0, cool=None),
+    )
+
+    temp_calls = _temp_calls(hass)
+    assert len(temp_calls) == 1
+    assert temp_calls[0][0][2]["temperature"] == 19.0  # 20.0 - 1.0, no turn-off
+    assert _hvac_calls(hass) == []
+
+
+@pytest.mark.asyncio
+async def test_positive_off_after_minutes_escalates_once_elapsed():
+    """A value > 0 turns the valve off after that many minutes of continuous setback."""
+    import custom_components.roommind.control.mpc_controller as mpc
+
+    clear_command_cache()
+    _idle_cfg["setback_offset"] = 1.0
+    _idle_cfg["off_after_minutes"] = 30.0
+    hass = build_hass()
+    hass.states.get = MagicMock(return_value=_trv_state("heat", temperature=21.0))
+    targets = TargetTemps(heat=20.0, cool=None)
+
+    # First pass starts the timer and still sets back.
+    mpc._idle_setback_since.pop("climate.trv1", None)
+    await async_idle_device(hass, "climate.trv1", _trv(), area_id="bath", targets=targets)
+    assert _temp_calls(hass)[0][0][2]["temperature"] == 19.0
+
+    # Pretend 31 minutes of continuous setback have passed.
+    # Note: clear_command_cache() also resets _idle_cfg to its defaults, so the
+    # escalation window has to be re-applied afterwards.
+    clear_command_cache()
+    _idle_cfg["setback_offset"] = 1.0
+    _idle_cfg["off_after_minutes"] = 30.0
+    hass2 = build_hass()
+    hass2.states.get = MagicMock(return_value=_trv_state("heat", temperature=19.0))
+    mpc._idle_setback_since["climate.trv1"] = mpc.time.monotonic() - 31 * 60
+    await async_idle_device(hass2, "climate.trv1", _trv(), area_id="bath", targets=targets)
+
+    assert any(c[0][2].get("hvac_mode") == "off" for c in _hvac_calls(hass2))
