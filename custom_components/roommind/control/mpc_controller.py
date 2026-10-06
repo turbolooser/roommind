@@ -46,6 +46,7 @@ from ..utils.device_utils import (
     get_ac_eids,
     get_direct_setpoint_eids,
     get_idle_action,
+    get_idle_setback_offset,
     get_trv_eids,
     has_reliable_hvac_modes,
 )
@@ -409,11 +410,17 @@ async def async_idle_device(
     if force_off and idle_action != IDLE_ACTION_LOW:
         idle_action = IDLE_ACTION_OFF
 
+    # Per-device offset, falling back to the global setting mirrored into
+    # _idle_cfg by async_apply. Resolved here rather than in async_apply because
+    # _idle_cfg is module-global (one value per cycle) and cannot carry a
+    # per-device value.
+    setback_offset = get_idle_setback_offset(devices, entity_id, _idle_cfg["setback_offset"])
+
     # Fallback low setpoint (in HA display units) for devices where min_temp
     # is not effective (e.g. Wavin Sentio with min_temp=0 or high min_temp).
     fallback_temp: float | None = None
     if targets is not None and targets.heat is not None:
-        fallback_temp = celsius_to_ha_temp(hass, targets.heat - _idle_cfg["setback_offset"])
+        fallback_temp = celsius_to_ha_temp(hass, targets.heat - setback_offset)
 
     # --- LOW branch ---
     # Some TRVs (e.g. battery Zigbee valves) enter deep-sleep hibernation after
@@ -464,9 +471,9 @@ async def async_idle_device(
 
         # Compute setback temperature
         if current_hvac == "heat" and targets.heat is not None:
-            setback_temp = targets.heat - _idle_cfg["setback_offset"]
+            setback_temp = targets.heat - setback_offset
         elif current_hvac == "cool" and targets.cool is not None:
-            setback_temp = targets.cool + _idle_cfg["setback_offset"]
+            setback_temp = targets.cool + setback_offset
         else:
             await async_turn_off_climate(hass, entity_id, area_id=area_id, fallback_setpoint=fallback_temp)
             return

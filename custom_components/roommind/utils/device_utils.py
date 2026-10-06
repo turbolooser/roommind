@@ -27,6 +27,21 @@ DEFAULT_IDLE_FAN_MODE = "low"
 IDLE_ACTION_SETBACK = "setback"
 IDLE_ACTION_LOW = "low"
 DEFAULT_IDLE_SETBACK_OFFSET = 2.0
+# Per-device setback offset bounds. 0 would make setback a no-op (idle setpoint
+# == target), and beyond 10 K the room is effectively unheated, which is what
+# "off" is for.
+MIN_IDLE_SETBACK_OFFSET = 0.1
+MAX_IDLE_SETBACK_OFFSET = 10.0
+
+# Idle actions each device type accepts. Stated explicitly rather than only
+# rejecting bad combinations, so the supported matrix is readable in one place:
+#   trv -> "off" / "low" / "setback"   (no fan to run; "low" for deep-sleep TRVs,
+#                                       "setback" to keep a sluggish radiator warm)
+#   ac  -> "off" / "fan_only" / "setback"  ("low" would cool toward min_temp forever)
+IDLE_ACTIONS_BY_TYPE = {
+    "trv": (IDLE_ACTION_OFF, IDLE_ACTION_LOW, IDLE_ACTION_SETBACK),
+    "ac": (IDLE_ACTION_OFF, IDLE_ACTION_FAN_ONLY, IDLE_ACTION_SETBACK),
+}
 
 SETPOINT_MODE_PROPORTIONAL = "proportional"
 SETPOINT_MODE_DIRECT = "direct"
@@ -267,6 +282,35 @@ def get_idle_action(devices: list[dict], entity_id: str) -> tuple[str, str]:
         dev.get("idle_action", IDLE_ACTION_OFF),
         dev.get("idle_fan_mode", DEFAULT_IDLE_FAN_MODE),
     )
+
+
+def get_idle_setback_offset(devices: list[dict], entity_id: str, default: float) -> float:
+    """Resolve the effective setback offset (K) for one device.
+
+    The useful offset follows the device type, not the room: an AC reacts within
+    seconds, so 2 K is fine; a radiator is sluggish, so 2 K lets the room fall a
+    full degree before heat returns and 1 K is the practical value. A room with
+    both device types needs both at once, which a per-room setting cannot express
+    — hence per device, the same level ``idle_action`` already lives on.
+
+    A missing/empty ``idle_setback_offset`` inherits ``default`` (the global
+    setting), mirroring the coil-dry sentinels. Out-of-range or unparseable
+    values fall back to ``default`` rather than raising: this runs in the control
+    loop, where a bad stored value must not stop the room from idling.
+    """
+    dev = get_device_by_eid(devices, entity_id)
+    if dev is None:
+        return default
+    raw = dev.get("idle_setback_offset")
+    if raw is None or raw == "":
+        return default
+    try:
+        offset = float(raw)
+    except (TypeError, ValueError):
+        return default
+    if not MIN_IDLE_SETBACK_OFFSET <= offset <= MAX_IDLE_SETBACK_OFFSET:
+        return default
+    return offset
 
 
 def get_direct_setpoint_eids(devices: list[dict]) -> set[str]:
