@@ -185,7 +185,12 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
                     "name": "roommind-panel",
                     "embed_iframe": False,
                     "trust_external": False,
-                    "js_url": "/roommind/roommind-panel.js",
+                    # Version query so browsers and the Companion app's WebView
+                    # fetch the new bundle after an update. Without it the URL is
+                    # identical across releases, the WebView keeps serving its
+                    # cached copy, and new panel features stay invisible until the
+                    # user clears the app cache by hand.
+                    "js_url": f"/roommind/roommind-panel.js?v={VERSION}",
                 }
             },
         )

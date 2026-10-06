@@ -80,8 +80,10 @@ Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle no
 ### 9. Configurable vacation action
 Vacation can **turn heating off while cooling continues** — for a summer trip you protect the house from overheating without wasting energy on heat.
 
-### 10. Panel fix for HA 2026.5+
+### 10. Panel fixes
 HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
+
+The panel's `js_url` also carries a `?v=<version>` cache buster. Upstream registers it under an URL that is identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.
 
 ---
 
