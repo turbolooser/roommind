@@ -2419,6 +2419,153 @@ async def test_validate_device_idle_action_unit():
     with pytest.raises(vol.Invalid):
         _validate_device_idle_action({"type": "ac", "idle_action": "low"})
 
+    # TRV + setback is explicitly supported (fork feature): on a sluggish radiator
+    # "low" lets the radiator go cold, so setback is the right idle behaviour.
+    assert _validate_device_idle_action({"type": "trv", "idle_action": "setback"}) == {
+        "type": "trv",
+        "idle_action": "setback",
+    }
+    # AC + setback stays allowed
+    assert _validate_device_idle_action({"type": "ac", "idle_action": "setback"}) == {
+        "type": "ac",
+        "idle_action": "setback",
+    }
+    # TRV + fan_only is rejected — a valve has no fan
+    with pytest.raises(vol.Invalid):
+        _validate_device_idle_action({"type": "trv", "idle_action": "fan_only"})
+    # A device without a type is left alone (other validators handle that)
+    assert _validate_device_idle_action({"idle_action": "low"}) == {"idle_action": "low"}
+
+
+@pytest.mark.asyncio
+async def test_save_room_accepts_idle_action_setback_for_trv(ws_hass, store, connection):
+    """TRV with idle_action='setback' is accepted and persisted end to end."""
+    await store.async_load()
+    msg = {
+        "id": 2,
+        "type": "roommind/rooms/save",
+        "area_id": "living_room",
+        "devices": [
+            {"entity_id": "climate.trv1", "type": "trv", "role": "auto", "idle_action": "setback"},
+        ],
+    }
+    await _save_room(ws_hass, connection, msg)
+    connection.send_result.assert_called_once()
+    room = connection.send_result.call_args[0][1]["room"]
+    assert any(d.get("idle_action") == "setback" and d["entity_id"] == "climate.trv1" for d in room["devices"])
+
+
+@pytest.mark.asyncio
+async def test_save_room_persists_per_device_setback_offset(ws_hass, store, connection):
+    """A per-device idle_setback_offset round-trips through save."""
+    await store.async_load()
+    msg = {
+        "id": 2,
+        "type": "roommind/rooms/save",
+        "area_id": "living_room",
+        "devices": [
+            {
+                "entity_id": "climate.trv1",
+                "type": "trv",
+                "role": "auto",
+                "idle_action": "setback",
+                "idle_setback_offset": 1.0,
+            },
+        ],
+    }
+    await _save_room(ws_hass, connection, msg)
+    connection.send_result.assert_called_once()
+    room = connection.send_result.call_args[0][1]["room"]
+    dev = next(d for d in room["devices"] if d["entity_id"] == "climate.trv1")
+    assert dev["idle_setback_offset"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_save_room_defaults_setback_offset_to_none(ws_hass, store, connection):
+    """Without the field the device inherits: stored as None, no migration needed."""
+    await store.async_load()
+    msg = {
+        "id": 2,
+        "type": "roommind/rooms/save",
+        "area_id": "living_room",
+        "devices": [
+            {"entity_id": "climate.trv1", "type": "trv", "role": "auto", "idle_action": "setback"},
+        ],
+    }
+    await _save_room(ws_hass, connection, msg)
+    room = connection.send_result.call_args[0][1]["room"]
+    dev = next(d for d in room["devices"] if d["entity_id"] == "climate.trv1")
+    assert dev.get("idle_setback_offset") is None
+
+
+def _save_room_schema():
+    """The real save-room schema off the decorated handler.
+
+    Taken from the live command rather than rebuilt locally, so these tests
+    cannot drift away from what the integration actually accepts.
+    """
+    from custom_components.roommind.websocket_api import websocket_save_room
+
+    return websocket_save_room._ws_schema
+
+
+@pytest.mark.parametrize("offset", [0.0, 0.05, 10.5, 50.0, -1.0])
+def test_schema_rejects_out_of_range_setback_offset(offset):
+    """Out-of-range offsets are refused, not silently clamped."""
+    import voluptuous as vol
+
+    msg = {
+        "id": 2,
+        "type": "roommind/rooms/save",
+        "area_id": "living_room",
+        "devices": [
+            {
+                "entity_id": "climate.trv1",
+                "type": "trv",
+                "role": "auto",
+                "idle_action": "setback",
+                "idle_setback_offset": offset,
+            },
+        ],
+    }
+    with pytest.raises(vol.Invalid):
+        _save_room_schema()(msg)
+
+
+@pytest.mark.parametrize("offset", [0.1, 1.0, 2.0, 10.0, None])
+def test_schema_accepts_valid_setback_offset(offset):
+    """In-range values and explicit null (= inherit global) pass."""
+    msg = {
+        "id": 2,
+        "type": "roommind/rooms/save",
+        "area_id": "living_room",
+        "devices": [
+            {
+                "entity_id": "climate.trv1",
+                "type": "trv",
+                "role": "auto",
+                "idle_action": "setback",
+                "idle_setback_offset": offset,
+            },
+        ],
+    }
+    validated = _save_room_schema()(msg)
+    assert validated["devices"][0]["idle_setback_offset"] == offset
+
+
+def test_schema_rejects_fan_only_on_trv():
+    """The per-type idle_action matrix is enforced by the live schema."""
+    import voluptuous as vol
+
+    msg = {
+        "id": 2,
+        "type": "roommind/rooms/save",
+        "area_id": "living_room",
+        "devices": [{"entity_id": "climate.trv1", "type": "trv", "role": "auto", "idle_action": "fan_only"}],
+    }
+    with pytest.raises(vol.Invalid):
+        _save_room_schema()(msg)
+
 
 @pytest.mark.asyncio
 async def test_save_room_rejects_unknown_idle_action(ws_hass, store, connection):
