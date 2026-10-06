@@ -66,8 +66,12 @@ Per device, choose **proportional (offset)** or **direct** setpoints. In offset 
 
 - `ac_cool_offset_max` / `ac_heat_offset_max` — max K of offset at full power (default `2.0`).
 
-### 7. Staged idle (setback → off)
-Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback (default `0` = immediate off; set higher to keep low-load circulation). Setback offset is configurable.
+### 7. Staged idle (setback → off), and setback for TRVs
+Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback (default `0` = immediate off; set higher to keep low-load circulation).
+
+**Setback is a supported idle action for thermostats (TRVs) too**, not just climate devices. On a sluggish radiator, `low` (setpoint to device minimum) lets the radiator go cold; after reopening, heat takes minutes to arrive while the room keeps falling — measured at `+0.01 K/h` over 20 hours in one bathroom, i.e. standstill. Setback keeps the valve at `target − offset`, so the radiator stays lukewarm and responds immediately. `low` remains the default and the right choice for battery Zigbee TRVs with deep-sleep issues.
+
+**The setback offset is configurable globally and per device.** The useful value follows the device type: an AC reacts in seconds (`2 K`, the upstream-compatible default), a radiator is sluggish (`1 K`, since `2 K` lets the room fall a full degree before heat returns). A room with both device types needs both at once, so the offset sits on the device, next to `idle_action`. Devices without their own value inherit the global setting — no migration, existing setups behave exactly as before.
 
 ### 8. Outdoor gates
 - `outdoor_cooling_min` (default `16 °C`) — never run the compressor for cooling below this averaged outdoor temperature (efficiency + condensation; open a window instead).
