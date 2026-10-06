@@ -102,12 +102,24 @@ RoomMind keeps the current HVAC mode active, but moves the target away from the 
 
 This lets the device back off instead of shutting off completely.
 
-Important:
+### The setback offset
 
-- the setback offset is currently fixed at `2°C`
-- it is **not configurable** in the current UI
+The offset defaults to `2 K` and is configurable at two levels:
 
-## Idle Behavior for Thermostats: Off, Low
+- **globally** in the integration's options flow (`Idle setback offset`)
+- **per device** in `Devices` → `Set back by (K)`, shown once `When idle` is set to
+  `Setback`. Leave it empty to inherit the global value.
+
+The per-device level exists because the useful offset follows the device type, not
+the room. An AC reacts within seconds, so `2 K` is fine. A radiator is sluggish, and
+`2 K` lets the room fall a full degree below target before heat returns — `1 K` is
+the practical value there. A room with both device types needs both offsets at the
+same time, which a single global or per-room value cannot express.
+
+Existing configurations keep working unchanged: a device without its own value
+inherits the global setting, and no migration is required.
+
+## Idle Behavior for Thermostats: Off, Low, Setback
 
 `When idle` also applies to `Thermostat` / TRV entries, with different options.
 
@@ -120,6 +132,49 @@ RoomMind sends the TRV to its `off` state.
 RoomMind keeps the TRV in its current heating mode but lowers the setpoint to the device's minimum temperature.
 
 Useful for battery-powered Zigbee TRVs that enter deep sleep when set to `off` and then stop reacting to commands. `Low` keeps the valve responsive while effectively stopping heating.
+
+### Setback
+
+RoomMind keeps the valve in heating mode and lowers the setpoint to `heat target - offset`
+instead of driving it to the device minimum.
+
+Useful for **sluggish radiators**. With `Low` the valve closes completely, the radiator
+goes cold, and after reopening it takes minutes before heat actually reaches the room —
+the room keeps falling during that time. In one measured case (bathroom radiator,
+20 hours of valid measurement) the room gained `+0.01 K/h`, i.e. it stood still. With
+`Setback` the radiator stays lukewarm and responds immediately.
+
+The offset follows the same global/per-device rules as for climate devices
+(see [The setback offset](#the-setback-offset)); `1 K` is the practical value for a
+radiator.
+
+### Which one to choose
+
+| Situation | Use |
+|---|---|
+| Battery Zigbee TRV that stops reacting after being off (deep sleep) | `Low` |
+| Sluggish radiator that takes minutes to deliver heat again | `Setback` |
+| Valve should genuinely stop, reaction time does not matter | `Turn off` |
+
+`Low` remains the default and stays the right answer for deep-sleep-prone valves:
+it keeps the device awake while stopping all heat output. `Setback` keeps *some*
+heat in the radiator, so it costs a little energy in exchange for response time.
+
+### Interaction with staged idle
+
+`Idle off after minutes` (integration options) escalates a continuous setback to a
+full turn-off once the timer expires — the valve then goes to `off`, which **undoes
+what setback is for**. Two consequences for TRVs:
+
+- The default `0` means "escalate immediately", which effectively disables setback.
+  Set a high value (or leave the escalation off) when you chose setback for a
+  sluggish radiator.
+- The timer resets whenever the device is commanded back into an active mode, so a
+  room that actually heats now and then never escalates.
+
+Note that escalation sends the valve to `off` regardless of the deep-sleep concern
+behind `Low`. On a battery TRV prone to deep sleep, prefer `Low`, or keep the
+escalation disabled.
 
 ## Evaporator Drying
 

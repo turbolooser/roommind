@@ -928,6 +928,7 @@ export class RsDeviceSection extends LitElement {
                   .options=${[
                     { value: "off", label: localize("devices.idle_action_off", lang) },
                     { value: "low", label: localize("devices.idle_action_low", lang) },
+                    { value: "setback", label: localize("devices.idle_action_setback", lang) },
                   ]}
                   @selected=${(e: Event) => this._onIdleActionChange(entityId, getSelectValue(e)!)}
                   @closed=${(e: Event) => e.stopPropagation()}
@@ -939,6 +940,9 @@ export class RsDeviceSection extends LitElement {
                   <ha-list-item value="low"
                     >${localize("devices.idle_action_low", lang)}</ha-list-item
                   >
+                  <ha-list-item value="setback"
+                    >${localize("devices.idle_action_setback", lang)}</ha-list-item
+                  >
                 </ha-select>
                 ${
                   device.idle_action === "low"
@@ -947,6 +951,35 @@ export class RsDeviceSection extends LitElement {
                       ></rs-info-icon>`
                     : nothing
                 }
+                ${
+                  device.idle_action === "setback"
+                    ? html`<rs-info-icon
+                        .text=${localize("devices.idle_action_setback_trv_hint", lang)}
+                      ></rs-info-icon>`
+                    : nothing
+                }
+              </div>
+            `
+          : nothing
+      }
+      ${
+        device.idle_action === "setback"
+          ? html`
+              <div class="detail-field">
+                <ha-textfield
+                  .value=${device.idle_setback_offset == null ? "" : String(device.idle_setback_offset)}
+                  .label=${localize("devices.idle_setback_offset", lang)}
+                  .helper=${localize("devices.idle_setback_offset_helper", lang)}
+                  helperPersistent
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  max="10"
+                  @change=${(e: Event) => {
+                    const raw = (e.target as HTMLInputElement).value.trim();
+                    this._onIdleSetbackOffsetChange(entityId, raw === "" ? null : Number(raw));
+                  }}
+                ></ha-textfield>
               </div>
             `
           : nothing
@@ -1115,6 +1148,16 @@ export class RsDeviceSection extends LitElement {
       d.entity_id === entityId ? { ...d, idle_fan_mode: fanMode } : d,
     );
     this._fireDeviceChanged(newDevices);
+  }
+
+  /** null clears the per-device override so the global setting applies again. */
+  private _onIdleSetbackOffsetChange(entityId: string, offset: number | null): void {
+    const clean = offset == null || Number.isNaN(offset) ? null : offset;
+    this._fireDeviceChanged(
+      this.devices.map((d) =>
+        d.entity_id === entityId ? { ...d, idle_setback_offset: clean } : d,
+      ),
+    );
   }
 
   private _onSetpointModeChange(entityId: string, mode: string): void {
