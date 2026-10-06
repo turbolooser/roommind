@@ -164,13 +164,20 @@ heat in the radiator, so it costs a little energy in exchange for response time.
 
 `Idle off after minutes` (integration options) escalates a continuous setback to a
 full turn-off once the timer expires — the valve then goes to `off`, which **undoes
-what setback is for**. Two consequences for TRVs:
+what setback is for**. Three things to know:
 
-- The default `0` means "escalate immediately", which effectively disables setback.
-  Set a high value (or leave the escalation off) when you chose setback for a
-  sluggish radiator.
+- **`0` (the default) disables the escalation entirely.** The setback then holds for
+  as long as the room stays idle, which is exactly what a sluggish radiator wants.
+- A value `> 0` turns the valve off after that many minutes of continuous setback.
+  Observed in practice: with `30`, a bathroom TRV held its setback setpoint from
+  19:28 and was switched off at 19:58 — the radiator then cooled down anyway.
 - The timer resets whenever the device is commanded back into an active mode, so a
-  room that actually heats now and then never escalates.
+  room that actually heats now and then never reaches the escalation.
+
+Note that `idle_off_after_minutes` is a **global** setting. A single value has to
+suit both your ACs (where escalating to off is often wanted) and your radiators
+(where it defeats the purpose), so pick it for whichever matters more in your
+setup.
 
 Note that escalation sends the valve to `off` regardless of the deep-sleep concern
 behind `Low`. On a battery TRV prone to deep sleep, prefer `Low`, or keep the
