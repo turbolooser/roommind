@@ -67,7 +67,7 @@ Per device, choose **proportional (offset)** or **direct** setpoints. In offset 
 - `ac_cool_offset_max` / `ac_heat_offset_max` — max K of offset at full power (default `2.0`).
 
 ### 7. Staged idle (setback → off), and setback for TRVs
-Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback (default `0` = immediate off; set higher to keep low-load circulation).
+Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback. `0` (the default) disables the escalation, so the setback holds as long as the room stays idle; a value `> 0` turns the device off after that many minutes.
 
 **Setback is a supported idle action for thermostats (TRVs) too**, not just climate devices. On a sluggish radiator, `low` (setpoint to device minimum) lets the radiator go cold; after reopening, heat takes minutes to arrive while the room keeps falling — measured at `+0.01 K/h` over 20 hours in one bathroom, i.e. standstill. Setback keeps the valve at `target − offset`, so the radiator stays lukewarm and responds immediately. `low` remains the default and the right choice for battery Zigbee TRVs with deep-sleep issues.
 
