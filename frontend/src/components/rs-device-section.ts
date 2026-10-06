@@ -659,7 +659,7 @@ export class RsDeviceSection extends LitElement {
       label: localize(`devices.idle_action_${value}`, l),
     });
     const options = isTrv
-      ? [option("off"), option("low")]
+      ? [option("off"), option("low"), option("setback")]
       : [
           option("off"),
           ...(hvacModes.includes("fan_only") ? [option("fan_only")] : []),
@@ -728,6 +728,24 @@ export class RsDeviceSection extends LitElement {
                 .text=${localize("devices.setback_auto_off_info", l)}
               ></rs-info-icon>
             </rs-list-row>`
+          : nothing
+      }
+      ${
+        idle === "setback"
+          ? html`<rs-number-field
+              .hass=${this.hass}
+              kind="temperature-delta"
+              allow-empty
+              .label=${localize("devices.idle_setback_offset", l)}
+              .info=${isTrv ? localize("devices.idle_action_setback_trv_hint", l) : ""}
+              .hint=${localize("devices.idle_setback_offset_helper", l)}
+              .value=${device.idle_setback_offset ?? null}
+              .min=${0.1}
+              .max=${10}
+              .step=${0.1}
+              @value-changed=${(e: CustomEvent<{ value: number | null }>) =>
+                this._onIdleSetbackOffsetChange(id, e.detail.value)}
+            ></rs-number-field>`
           : nothing
       }
     </div>`;
@@ -1111,6 +1129,16 @@ export class RsDeviceSection extends LitElement {
       return updated;
     });
     this._fireDeviceChanged(newDevices);
+  }
+
+  /** null clears the per-device override so the global setting applies again. */
+  private _onIdleSetbackOffsetChange(entityId: string, offset: number | null): void {
+    const clean = offset == null || Number.isNaN(offset) ? null : offset;
+    this._fireDeviceChanged(
+      this.devices.map((d) =>
+        d.entity_id === entityId ? { ...d, idle_setback_offset: clean } : d,
+      ),
+    );
   }
 
   private _onIdleFanModeChange(entityId: string, fanMode: string): void {
