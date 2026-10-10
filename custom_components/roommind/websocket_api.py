@@ -450,7 +450,11 @@ async def websocket_list_rooms(
         vol.Optional("heat_source_orchestration"): bool,
         vol.Optional("heat_source_primary_delta"): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=5.0)),
         vol.Optional("heat_source_outdoor_threshold"): vol.All(vol.Coerce(float), vol.Range(min=-20, max=25)),
-        vol.Optional("heat_source_ac_min_outdoor"): vol.All(vol.Coerce(float), vol.Range(min=-30, max=5)),
+        # Upper bound raised from upstream's 5 °C: the field doubles as the only hard
+        # "this AC must not heat" switch. Everything else in the orchestrator is a
+        # preference, so a value above any realistic heating weather (e.g. 20 °C) is
+        # the one setting that keeps a heat-capable AC out of the plan for good.
+        vol.Optional("heat_source_ac_min_outdoor"): vol.All(vol.Coerce(float), vol.Range(min=-30, max=30)),
         vol.Optional("climate_control_enabled"): bool,
     }
 )
