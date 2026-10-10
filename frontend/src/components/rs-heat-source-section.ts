@@ -137,7 +137,7 @@ export class RsHeatSourceSection extends LitElement {
                 .info=${localize("heat_source.ac_min_outdoor_hint", l)}
                 .value=${this.acMinOutdoor}
                 .min=${-30}
-                .max=${5}
+                .max=${30}
                 .step=${1}
                 @value-changed=${(e: CustomEvent<{ value: number }>) =>
                   this._emit("heat_source_ac_min_outdoor", e.detail.value)}
