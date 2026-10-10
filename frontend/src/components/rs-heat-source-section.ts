@@ -180,7 +180,9 @@ export class RsHeatSourceSection extends LitElement {
                   suffix: localize("heat_source.ac_min_outdoor_suffix", lang),
                   value: this.acMinOutdoor,
                   min: -30,
-                  max: 5,
+                  // Up to 30 °C: above any realistic heating weather this is the
+                  // only hard switch that keeps an AC out of the heating plan.
+                  max: 30,
                   step: 1,
                   key: "heat_source_ac_min_outdoor",
                 })}
