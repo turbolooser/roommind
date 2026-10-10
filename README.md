@@ -73,14 +73,21 @@ Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle no
 
 **The setback offset is configurable globally and per device.** The useful value follows the device type: an AC reacts in seconds (`2 K`, the upstream-compatible default), a radiator is sluggish (`1 K`, since `2 K` lets the room fall a full degree before heat returns). A room with both device types needs both at once, so the offset sits on the device, next to `idle_action`. Devices without their own value inherit the global setting — no migration, existing setups behave exactly as before.
 
-### 8. Outdoor gates
+### 8. Lock an AC out of heating
+`Min. outdoor temp for AC heating` now accepts up to `30 °C` (upstream caps it at `5`). Upstream means it as a heat-pump efficiency guard — below that temperature an AC is too inefficient to bother. Everything else in the heat-source orchestrator is only a *preference*: `outdoor_threshold` and `primary_delta` shift which source is favoured, they never exclude one. This bound is the single hard switch, because `ac_disabled` drops ACs from both the primary and the secondary list.
+
+Set it above any realistic heating weather (e.g. `20 °C`) and a heat-capable AC stays out of the heating plan for good — useful when the AC hangs in the wrong part of a split room, or simply should never heat. Cooling is unaffected: the orchestrator only runs for `MODE_HEATING`. Default stays `-15`, so behaviour is identical to upstream unless you raise it.
+
+Known limit: the lockout needs a known outdoor temperature (`ac_disabled` is guarded by `outdoor_temp is not None`). With the sensor unavailable the orchestrator falls back to its delta heuristic and can still pick the AC — pinned in a test rather than silently changed, since altering it would affect every orchestrated room.
+
+### 9. Outdoor gates
 - `outdoor_cooling_min` (default `16 °C`) — never run the compressor for cooling below this averaged outdoor temperature (efficiency + condensation; open a window instead).
 - `outdoor_heating_max` (default `22 °C`) — don't heat above this.
 
-### 9. Configurable vacation action
+### 10. Configurable vacation action
 Vacation can **turn heating off while cooling continues** — for a summer trip you protect the house from overheating without wasting energy on heat.
 
-### 10. Panel fixes
+### 11. Panel fixes
 HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
 
 The panel's `js_url` also carries a `?v=<version>` cache buster. Upstream registers it under an URL that is identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.
