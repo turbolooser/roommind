@@ -643,6 +643,11 @@ export class RsSensorSection extends LitElement {
         <ha-select
           .label=${localize("devices.window_pause_mode", lang)}
           .value=${this.windowPauseMode || "always"}
+          .options=${[
+            { value: "always", label: localize("devices.window_pause_always", lang) },
+            { value: "heating_only", label: localize("devices.window_pause_heating_only", lang) },
+            { value: "cooling_only", label: localize("devices.window_pause_cooling_only", lang) },
+          ]}
           fixedMenuPosition
           @selected=${this._onWindowPauseModeChange}
           @closed=${(e: Event) => e.stopPropagation()}
@@ -966,7 +971,7 @@ export class RsSensorSection extends LitElement {
 
   private _onWindowPauseModeChange = (e: Event) => {
     const value = getSelectValue(e);
-    if (!value || value === this.windowPauseMode) return;
+    if (!value) return;
     this.dispatchEvent(
       new CustomEvent("sensor-changed", {
         detail: { key: "window_pause_mode", value },
