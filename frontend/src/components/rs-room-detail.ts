@@ -63,6 +63,7 @@ export class RsRoomDetail extends LitElement {
   @state() private _selectedWindowSensors: Set<string> = new Set();
   @state() private _windowOpenDelay = 0;
   @state() private _windowCloseDelay = 0;
+  @state() private _windowPauseMode = "always";
   @state() private _climateMode: ClimateMode = "auto";
   @state() private _schedules: ScheduleEntry[] = [];
   @state() private _scheduleSelectorEntity = "";
@@ -272,6 +273,7 @@ export class RsRoomDetail extends LitElement {
       this._selectedWindowSensors = new Set(this.config.window_sensors ?? []);
       this._windowOpenDelay = this.config.window_open_delay ?? 0;
       this._windowCloseDelay = this.config.window_close_delay ?? 0;
+      this._windowPauseMode = this.config.window_pause_mode ?? "always";
       this._climateMode = this.config.climate_mode;
       this._schedules = this.config.schedules ?? [];
       this._scheduleSelectorEntity = this.config.schedule_selector_entity ?? "";
@@ -315,6 +317,7 @@ export class RsRoomDetail extends LitElement {
       this._selectedWindowSensors = new Set();
       this._windowOpenDelay = 0;
       this._windowCloseDelay = 0;
+      this._windowPauseMode = "always";
       this._climateMode = "auto";
       this._schedules = [];
       this._scheduleSelectorEntity = "";
@@ -529,6 +532,7 @@ export class RsRoomDetail extends LitElement {
                       .windowSensors=${this._selectedWindowSensors}
                       .windowOpenDelay=${this._windowOpenDelay}
                       .windowCloseDelay=${this._windowCloseDelay}
+                      .windowPauseMode=${this._windowPauseMode}
                       .heatingSystemType=${resolveHeatingSystemType(this._devices)}
                       .language=${this.hass.language}
                       @sensor-changed=${this._onSensorChanged}
@@ -792,6 +796,7 @@ export class RsRoomDetail extends LitElement {
             .windowSensors=${this._selectedWindowSensors}
             .windowOpenDelay=${this._windowOpenDelay}
             .windowCloseDelay=${this._windowCloseDelay}
+            .windowPauseMode=${this._windowPauseMode}
             .heatingSystemType=${resolveHeatingSystemType(this._devices)}
             .language=${this.hass.language}
             @sensor-changed=${this._onSensorChanged}
@@ -1023,6 +1028,8 @@ export class RsRoomDetail extends LitElement {
       this._windowOpenDelay = value as number;
     } else if (key === "window_close_delay") {
       this._windowCloseDelay = value as number;
+    } else if (key === "window_pause_mode") {
+      this._windowPauseMode = value as string;
     }
     this._autoSave();
   }
@@ -1166,6 +1173,7 @@ export class RsRoomDetail extends LitElement {
         window_sensors: [...this._selectedWindowSensors],
         window_open_delay: this._windowOpenDelay,
         window_close_delay: this._windowCloseDelay,
+        window_pause_mode: this._windowPauseMode,
         climate_mode: this._climateMode,
         schedules: this._schedules,
         schedule_selector_entity: this._scheduleSelectorEntity,
