@@ -245,3 +245,30 @@ In that case RoomMind can decide which source should heat:
 - or both, when the gap is large
 
 It uses temperature gap and outdoor conditions to make that choice.
+
+## Window Pause: Always, Heating Only, Cooling Only
+
+Window and door sensors pause climate control while a window is open. That is
+almost always what you want in winter, and almost never what you want for a room
+being cooled with the terrace door deliberately open.
+
+`Window pauses control` sits next to the window sensors and decides when the
+pause applies:
+
+- **Always** — the default, and identical to how RoomMind behaved before this
+  option existed. An open window stops heating and cooling alike.
+- **Only when heating** — the pause applies while the room heats; in cooling the
+  sensors are ignored. This is the summer case: the AC keeps running with the
+  door open.
+- **Only when cooling** — the mirror image, for a room that should keep heating
+  with a window open but must not cool against it.
+
+The setting only lifts the *control* pause. Model learning stays frozen for as
+long as a window is physically open, in every mode — an open window skews the
+room's heat balance whether you are heating or cooling, and training on that
+data would corrupt the thermal model. The open and close delays keep working
+unchanged; they decide *when* a window counts as open, this option decides *what
+happens* once it does.
+
+An unrecognised value falls back to `Always`, so a damaged configuration never
+silently disables the pause.

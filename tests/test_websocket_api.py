@@ -6,6 +6,7 @@ from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import voluptuous as vol
 
 from custom_components.roommind.const import DOMAIN
 from custom_components.roommind.websocket_api import (
@@ -3292,3 +3293,28 @@ def test_clear_sky_peak_today_follows_the_season():
     winter = clear_sky_peak_today(52.5, 13.4, datetime(2026, 1, 12, 9, tzinfo=UTC).timestamp())
     assert 0.7 < summer < 1.0
     assert winter < 0.4 * summer
+
+
+# ---------------------------------------------------------------------------
+# window_pause_mode schema (fork feature)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["always", "heating_only", "cooling_only"])
+def test_window_pause_mode_accepted(value):
+    msg = {"id": 1, "type": "roommind/rooms/save", "area_id": "office", "window_pause_mode": value}
+    assert websocket_save_room._ws_schema(msg)["window_pause_mode"] == value
+
+
+@pytest.mark.parametrize("value", ["", "heating", "HEATING_ONLY", "nonsense", 0, None, True])
+def test_window_pause_mode_rejected(value):
+    """Anything outside the three known values must not reach the store."""
+    msg = {"id": 1, "type": "roommind/rooms/save", "area_id": "office", "window_pause_mode": value}
+    with pytest.raises(vol.Invalid):
+        websocket_save_room._ws_schema(msg)
+
+
+def test_window_pause_mode_is_optional():
+    """Omitting it leaves the room untouched — no implicit default on save."""
+    msg = {"id": 1, "type": "roommind/rooms/save", "area_id": "office"}
+    assert "window_pause_mode" not in websocket_save_room._ws_schema(msg)
