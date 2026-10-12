@@ -120,6 +120,7 @@ const ROOM_FIELDS: [string, RoomFieldSync][] = [
   ["window_sensors", asSet("_selectedWindowSensors", (c) => c?.window_sensors ?? [])],
   ["window_open_delay", plain("_windowOpenDelay", (c) => c?.window_open_delay ?? 0)],
   ["window_close_delay", plain("_windowCloseDelay", (c) => c?.window_close_delay ?? 0)],
+  ["window_pause_mode", plain("_windowPauseMode", (c) => c?.window_pause_mode ?? "always")],
   ["climate_mode", plain("_climateMode", (c) => c?.climate_mode ?? "auto")],
   ["schedules", plain("_schedules", (c) => c?.schedules ?? [])],
   [
@@ -255,6 +256,7 @@ export class RsRoomDetail extends LitElement {
   @state() private _selectedWindowSensors: Set<string> = new Set();
   @state() private _windowOpenDelay = 0;
   @state() private _windowCloseDelay = 0;
+  @state() private _windowPauseMode = "always";
   @state() private _climateMode: ClimateMode = "auto";
   @state() private _schedules: ScheduleEntry[] = [];
   @state() private _scheduleSelectorEntity = "";
@@ -794,6 +796,7 @@ export class RsRoomDetail extends LitElement {
         .windowSensors=${this._selectedWindowSensors}
         .windowOpenDelay=${this._windowOpenDelay}
         .windowCloseDelay=${this._windowCloseDelay}
+        .windowPauseMode=${this._windowPauseMode}
         .heatingSystemType=${resolveHeatingSystemType(this._devices)}
         .language=${l}
       ></rs-sensor-section>
@@ -987,6 +990,7 @@ export class RsRoomDetail extends LitElement {
             .windowSensors=${this._selectedWindowSensors}
             .windowOpenDelay=${this._windowOpenDelay}
             .windowCloseDelay=${this._windowCloseDelay}
+            .windowPauseMode=${this._windowPauseMode}
             .heatingSystemType=${resolveHeatingSystemType(this._devices)}
             .language=${this.hass.language}
             @sensor-changed=${this._onSensorChanged}
@@ -1283,6 +1287,8 @@ export class RsRoomDetail extends LitElement {
       this._windowOpenDelay = value as number;
     } else if (key === "window_close_delay") {
       this._windowCloseDelay = value as number;
+    } else if (key === "window_pause_mode") {
+      this._windowPauseMode = value as string;
     }
     this._autoSave();
   }

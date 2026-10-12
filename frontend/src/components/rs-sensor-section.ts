@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant, HassArea, RoomLiveData } from "../types";
 import { getEntitiesForArea } from "../utils/room-state";
 import { localize } from "../utils/localize";
-import { openEntityInfo } from "../utils/events";
+import { getSelectValue, openEntityInfo } from "../utils/events";
 import { tempUnit } from "../utils/temperature";
 import { formatMinutes, formatNumber, formatPercent } from "../utils/format";
 import { tokens } from "../styles/tokens";
@@ -50,6 +50,7 @@ export class RsSensorSection extends LitElement {
   @property({ attribute: false }) public windowSensors: Set<string> = new Set();
   @property({ type: Number }) public windowOpenDelay = 0;
   @property({ type: Number }) public windowCloseDelay = 0;
+  @property({ type: String }) public windowPauseMode = "always";
   @property({ type: String }) public co2Sensor = "";
   @property({ type: Number }) public co2Threshold = DEFAULT_CO2_THRESHOLD;
   @property({ type: String }) public vocSensor = "";
@@ -719,6 +720,28 @@ export class RsSensorSection extends LitElement {
             this._fireSensorChanged("window_close_delay", e.detail.value)}
         ></rs-number-field>
       </div>
+      <rs-field>
+        <ha-select
+          .label=${localize("devices.window_pause_mode", l)}
+          .value=${this.windowPauseMode || "always"}
+          .options=${[
+            { value: "always", label: localize("devices.window_pause_always", l) },
+            { value: "heating_only", label: localize("devices.window_pause_heating_only", l) },
+            { value: "cooling_only", label: localize("devices.window_pause_cooling_only", l) },
+          ]}
+          fixedMenuPosition
+          @selected=${this._onWindowPauseModeChange}
+          @closed=${(e: Event) => e.stopPropagation()}
+        >
+          <ha-list-item value="always">${localize("devices.window_pause_always", l)}</ha-list-item>
+          <ha-list-item value="heating_only"
+            >${localize("devices.window_pause_heating_only", l)}</ha-list-item
+          >
+          <ha-list-item value="cooling_only"
+            >${localize("devices.window_pause_cooling_only", l)}</ha-list-item
+          >
+        </ha-select>
+      </rs-field>
       ${
         this.heatingSystemType === "underfloor" && this.windowOpenDelay < 300
           ? html`<p class="note warn">
@@ -848,6 +871,18 @@ export class RsSensorSection extends LitElement {
         this._fireSensorChanged("voc_threshold", e.detail.value)}
     ></rs-number-field>`;
   }
+
+  private _onWindowPauseModeChange = (e: Event) => {
+    const value = getSelectValue(e);
+    if (!value || value === this.windowPauseMode) return;
+    this.dispatchEvent(
+      new CustomEvent("sensor-changed", {
+        detail: { key: "window_pause_mode", value },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  };
 
   private _fireSensorChanged(key: string, value: boolean | number | null) {
     this.dispatchEvent(

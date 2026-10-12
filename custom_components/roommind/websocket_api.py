@@ -27,6 +27,7 @@ from .const import (
     OVERRIDE_CUSTOM,
     OVERRIDE_TYPES,
     VENTILATION_DOMAINS,
+    WINDOW_PAUSE_MODES,
     build_override_live,
     is_override_suppressed,
 )
@@ -148,6 +149,7 @@ _ROOM_SAVE_FIELDS = (
     "window_sensors",
     "window_open_delay",
     "window_close_delay",
+    "window_pause_mode",
     "comfort_temp",
     "eco_temp",
     "comfort_heat",
@@ -496,6 +498,7 @@ async def websocket_list_rooms(
         vol.Optional("window_sensors"): [str],
         vol.Optional("window_open_delay"): vol.Coerce(int),
         vol.Optional("window_close_delay"): vol.Coerce(int),
+        vol.Optional("window_pause_mode"): vol.In(WINDOW_PAUSE_MODES),
         vol.Optional("comfort_temp"): vol.Coerce(float),
         vol.Optional("eco_temp"): vol.Coerce(float),
         vol.Optional("comfort_heat"): vol.Coerce(float),
