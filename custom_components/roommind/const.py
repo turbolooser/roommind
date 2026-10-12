@@ -32,6 +32,18 @@ MODE_IDLE = "idle"
 MODE_HEATING = "heating"
 MODE_COOLING = "cooling"
 
+# When an open window pauses climate control.  Upstream always pauses; a room
+# that cools against a deliberately open terrace door wants the sensors ignored
+# in summer but honoured in winter, which is what the other two values are for.
+WINDOW_PAUSE_ALWAYS = "always"
+WINDOW_PAUSE_HEATING_ONLY = "heating_only"
+WINDOW_PAUSE_COOLING_ONLY = "cooling_only"
+WINDOW_PAUSE_MODES = [
+    WINDOW_PAUSE_ALWAYS,
+    WINDOW_PAUSE_HEATING_ONLY,
+    WINDOW_PAUSE_COOLING_ONLY,
+]
+
 # Schedule states
 SCHEDULE_STATE_ON = "on"
 

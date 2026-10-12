@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import voluptuous as vol
 
 from custom_components.roommind.const import DOMAIN
 from custom_components.roommind.websocket_api import (
@@ -3240,3 +3241,28 @@ async def test_override_preset_resolves_to_band_per_climate_mode(
 
     room = store.get_room("bed")
     assert (room["override_heat"], room["override_cool"]) == expected
+
+
+# ---------------------------------------------------------------------------
+# window_pause_mode schema (fork feature)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["always", "heating_only", "cooling_only"])
+def test_window_pause_mode_accepted(value):
+    msg = {"id": 1, "type": "roommind/rooms/save", "area_id": "office", "window_pause_mode": value}
+    assert websocket_save_room._ws_schema(msg)["window_pause_mode"] == value
+
+
+@pytest.mark.parametrize("value", ["", "heating", "HEATING_ONLY", "nonsense", 0, None, True])
+def test_window_pause_mode_rejected(value):
+    """Anything outside the three known values must not reach the store."""
+    msg = {"id": 1, "type": "roommind/rooms/save", "area_id": "office", "window_pause_mode": value}
+    with pytest.raises(vol.Invalid):
+        websocket_save_room._ws_schema(msg)
+
+
+def test_window_pause_mode_is_optional():
+    """Omitting it leaves the room untouched — no implicit default on save."""
+    msg = {"id": 1, "type": "roommind/rooms/save", "area_id": "office"}
+    assert "window_pause_mode" not in websocket_save_room._ws_schema(msg)

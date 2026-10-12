@@ -17,6 +17,7 @@ from .const import (
     DEFAULT_HEAT_SOURCE_OUTDOOR_THRESHOLD,
     DEFAULT_HEAT_SOURCE_PRIMARY_DELTA,
     DOMAIN,
+    WINDOW_PAUSE_ALWAYS,
 )
 from .utils.device_utils import (
     devices_to_legacy,
@@ -262,6 +263,7 @@ class RoomMindStore:
             "window_sensors": config.get("window_sensors", []),
             "window_open_delay": config.get("window_open_delay", 0),
             "window_close_delay": config.get("window_close_delay", 0),
+            "window_pause_mode": config.get("window_pause_mode", WINDOW_PAUSE_ALWAYS),
             "comfort_temp": comfort_heat,
             "eco_temp": eco_heat,
             "comfort_heat": comfort_heat,
