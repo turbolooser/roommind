@@ -462,3 +462,28 @@ async def test_coil_dry_device_fields_survive_save(store):
     assert dev["coil_dry_fan_mode"] == "high"
     # Legacy sync must still produce the acs list
     assert store.get_room("living_room")["acs"] == ["climate.living_ac"]
+
+
+# ---------------------------------------------------------------------------
+# window_pause_mode (fork feature)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_window_pause_mode_defaults_to_always(store):
+    """A room saved before the feature existed keeps upstream behaviour."""
+    await store.async_load()
+    room = await store.async_save_room("living_room", {})
+    assert room["window_pause_mode"] == "always"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["always", "heating_only", "cooling_only"])
+async def test_window_pause_mode_round_trips(store, value):
+    await store.async_load()
+    room = await store.async_save_room("living_room", {"window_pause_mode": value})
+    assert room["window_pause_mode"] == value
+
+    # and survives an unrelated save
+    again = await store.async_save_room("living_room", {"comfort_heat": 21.5})
+    assert again["window_pause_mode"] == value
