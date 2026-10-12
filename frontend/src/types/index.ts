@@ -116,6 +116,8 @@ export interface RoomConfig {
   window_sensors: string[];
   window_open_delay: number;
   window_close_delay: number;
+  /** When an open window pauses control. Absent/"always" = upstream behaviour. */
+  window_pause_mode?: "always" | "heating_only" | "cooling_only";
   climate_mode: ClimateMode;
   schedules: ScheduleEntry[];
   schedule_selector_entity: string;

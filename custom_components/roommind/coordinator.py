@@ -64,6 +64,9 @@ from .const import (
     THERMAL_SAVE_CYCLES,
     UPDATE_INTERVAL,
     VACATION_ACTION_OFF,
+    WINDOW_PAUSE_ALWAYS,
+    WINDOW_PAUSE_COOLING_ONLY,
+    WINDOW_PAUSE_HEATING_ONLY,
     TargetTemps,
     build_override_live,
     is_override_active,
@@ -169,6 +172,22 @@ def _orchestrated_training_power(heat_source_plan: HeatSourcePlan) -> float:
     """
     active = [c.power_fraction for c in heat_source_plan.commands if c.active]
     return sum(active) / len(active) if active else 0.0
+
+
+def _window_pause_applies(room: dict, mode: str) -> bool:
+    """Whether an open window should pause control for this room in this mode.
+
+    Upstream always pauses.  ``window_pause_mode`` lets a room keep cooling with
+    the terrace door open in summer while still honouring the sensors in winter.
+    An unknown value falls back to the safe "always", so a corrupted store never
+    silently disables the pause.
+    """
+    setting = room.get("window_pause_mode", WINDOW_PAUSE_ALWAYS)
+    if setting == WINDOW_PAUSE_HEATING_ONLY:
+        return mode == MODE_HEATING
+    if setting == WINDOW_PAUSE_COOLING_ONLY:
+        return mode == MODE_COOLING
+    return True
 
 
 class RoomMindCoordinator(DataUpdateCoordinator):
@@ -905,6 +924,13 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 room.get("window_open_delay", 0),
                 room.get("window_close_delay", 0),
             )
+        if (window_open or window_pending) and not _window_pause_applies(room, mode):
+            # Room is configured to ignore its window sensors in this mode (e.g.
+            # cooling against a deliberately open terrace door).  Only the
+            # *control* pause is lifted: raw_open still gates EKF training below,
+            # because an open window skews the heat balance either way.
+            window_open = False
+            window_pending = False
         if window_open or window_pending:
             mode = MODE_IDLE
             power_fraction = 0.0
