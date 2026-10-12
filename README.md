@@ -87,7 +87,12 @@ Known limit: the lockout needs a known outdoor temperature (`ac_disabled` is gua
 ### 10. Configurable vacation action
 Vacation can **turn heating off while cooling continues** — for a summer trip you protect the house from overheating without wasting energy on heat.
 
-### 11. Panel fixes
+### 11. Window pause per mode
+`Window pauses control`, next to the window sensors, decides *when* an open window stops the room: `Always` (the default, upstream behaviour), `Only when heating`, or `Only when cooling`. Upstream always pauses, which is right in winter and wrong for a room cooled with the terrace door deliberately open — there the only workaround was removing the sensors entirely, losing the pause for the heating season too.
+
+Only the *control* pause is conditional. Model learning stays frozen whenever a window is physically open, in every mode: an open window skews the room's heat balance either way, and training on that data would corrupt the thermal model. The open/close delays are untouched — they decide when a window counts as open, this decides what happens once it does. An unrecognised value falls back to `Always`.
+
+### 12. Panel fixes
 HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
 
 The panel's `js_url` also carries a `?v=<version>` cache buster. Upstream registers it under an URL that is identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.
