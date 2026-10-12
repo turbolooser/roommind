@@ -4,6 +4,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.5%2B-blue.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/github/license/turbolooser/roommind)](https://github.com/turbolooser/roommind/blob/main/LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/turbolooser/roommind)](https://github.com/turbolooser/roommind/releases/latest)
+[![Auf Deutsch lesen](https://img.shields.io/badge/lesen-auf%20Deutsch-informational.svg)](https://github-com.translate.goog/turbolooser/roommind?_x_tr_sl=en&_x_tr_tl=de&_x_tr_hl=de)
 
 **Intelligent room climate control for Home Assistant** — self-learning thermal model, proportional valve control, and a dedicated management panel.
 
