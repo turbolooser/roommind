@@ -161,7 +161,6 @@ def _match_room_entity(parts: str, rooms: dict) -> tuple[str, str] | None:
     return None
 
 
-
 def _window_pause_applies(room: dict, mode: str) -> bool:
     """Whether an open window should pause control for this room in this mode.
 
@@ -176,6 +175,7 @@ def _window_pause_applies(room: dict, mode: str) -> bool:
     if setting == WINDOW_PAUSE_COOLING_ONLY:
         return mode == MODE_COOLING
     return True
+
 
 class RoomMindCoordinator(DataUpdateCoordinator):
     """Central coordinator for RoomMind room data and state."""
