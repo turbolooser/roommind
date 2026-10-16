@@ -856,7 +856,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             # A device without a usable state yet (Zigbee after a restart): ask again in
             # the next cycle, within the startup grace period of the temperature sensors.
             seed_pending = seeded is None and time.monotonic() - self._startup_ts < MAX_SENSOR_STALENESS
-            if seeded not in (None, MODE_IDLE):
+            if seeded is not None and seeded != MODE_IDLE:
                 self._previous_modes[area_id] = seeded
                 self._mode_on_since[area_id] = time.time()
                 self._idle_since.pop(area_id, None)
