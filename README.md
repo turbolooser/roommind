@@ -20,6 +20,8 @@ This fork only adds a layer of tuning on top, specifically for running several A
 
 **→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
+**Upstream base of this release:** fork `1.8.3` is built on upstream **`v1.8.0`** (commit [`2b028c5`](https://github.com/snazzybean/roommind/commit/2b028c5d1a14795a5bff20029fc6c0ccf4e2e893)). From 1.8.3 on the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
+
 ---
 
 ## What this fork adds
