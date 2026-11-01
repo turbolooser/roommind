@@ -295,6 +295,7 @@ class TestBuildAnalyticsData:
         store.get_room.return_value = {}
         coordinator = MagicMock()
         coordinator.rooms = {"living_room": {"occupancy_vacant": True}}
+        coordinator.outdoor_temp_effective = None  # fork: season-aware forecast reads it
         coordinator._history_store.read_detail.return_value = []
         coordinator._history_store.read_history.return_value = []
 
