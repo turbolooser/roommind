@@ -20,6 +20,8 @@ This fork only adds a layer of tuning on top, specifically for running several A
 
 **→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
+**Upstream base of this release:** fork `1.8.6` is built on upstream **`v1.8.1`** (commit [`2aeb49a`](https://github.com/snazzybean/roommind/commit/2aeb49a6999203a9fab1219ce3cf2b7d3e28305a)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
+
 ---
 
 ## What this fork adds
@@ -68,7 +70,7 @@ Per device, choose **proportional (offset)** or **direct** setpoints. In offset 
 - `ac_cool_offset_max` / `ac_heat_offset_max` — max K of offset at full power (default `2.0`).
 
 ### 7. Staged idle (setback → off), and setback for TRVs
-Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback. `0` (the default) disables the escalation, so the setback holds as long as the room stays idle; a value `> 0` turns the device off after that many minutes.
+Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback. `0` (the default) disables the escalation, so the setback holds as long as the room stays idle; a value `> 0` turns the device off after that many minutes. This timer is independent of upstream's per-device `setback_auto_off` (since upstream v1.8.1, #255): a setback device without that option still goes off after `idle_off_after_minutes`, and with it the upstream release may end the setback earlier.
 
 **Setback is a supported idle action for thermostats (TRVs) too**, not just climate devices. On a sluggish radiator, `low` (setpoint to device minimum) lets the radiator go cold; after reopening, heat takes minutes to arrive while the room keeps falling — measured at `+0.01 K/h` over 20 hours in one bathroom, i.e. standstill. Setback keeps the valve at `target − offset`, so the radiator stays lukewarm and responds immediately. `low` remains the default and the right choice for battery Zigbee TRVs with deep-sleep issues.
 
