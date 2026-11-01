@@ -356,7 +356,7 @@ def get_setpoint_offsets(devices: list[dict]) -> dict[str, float]:
 def get_valve_entities(devices: list[dict]) -> dict[str, tuple[str, str]]:
     """Return {climate_entity_id: (opening_eid, closing_eid)} for TRVs with direct valve control (#413).
 
-    Both degrees are needed: opening X with closing 100 - X pins the valve at X %
+    Both degrees are needed: heating opening X with idle opening X pins the valve at X %
     whatever the TRV's own controller decides.
     """
     result: dict[str, tuple[str, str]] = {}
