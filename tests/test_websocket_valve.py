@@ -97,7 +97,7 @@ async def test_clearing_the_valve_entities_hands_the_valve_back(ws_hass, store, 
 
     await _save(ws_hass, connection, [_device()], msg_id=2)
 
-    assert _number_calls(ws_hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(ws_hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
@@ -121,7 +121,7 @@ async def test_deleting_the_room_hands_the_valve_back(ws_hass, store, connection
 
     await _delete_room(ws_hass, connection, {"id": 3, "type": "roommind/rooms/delete", "area_id": "living"})
 
-    assert _number_calls(ws_hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(ws_hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
