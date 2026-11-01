@@ -91,7 +91,7 @@ export interface DeviceConfig {
   coil_dry_mode?: "" | "fan_only" | "dry"; // "" = inherit global
   coil_dry_fan_mode?: string; // "" = inherit global, "__keep__" = keep current
   valve_opening_entity?: string; // number entity for direct valve opening degree (0-100%)
-  valve_closing_entity?: string; // number entity for direct valve closing degree (0-100%)
+  valve_closing_entity?: string; // number entity for the valve opening while idle (Z2M idle_valve_position, 0-100%)
 }
 
 export type ConflictResolution =
