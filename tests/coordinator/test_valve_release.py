@@ -56,7 +56,7 @@ async def test_disabled_climate_control_releases_the_valve(hass, mock_config_ent
 
     await coordinator._async_update_data()
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
     assert [c for c in hass.services.async_call.call_args_list if c[0][0] == "climate"] == []
 
 
@@ -67,7 +67,7 @@ async def test_outdoor_area_releases_the_valve(hass, mock_config_entry):
 
     await coordinator._async_update_data()
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
@@ -78,7 +78,7 @@ async def test_room_switched_off_releases_the_valve(hass, mock_config_entry):
 
     await coordinator._async_update_data()
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 def _climate_calls(hass):
@@ -108,7 +108,7 @@ async def test_room_switched_off_does_not_hand_the_target_back(hass, mock_config
 
     await coordinator._async_update_data()
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
     setpoints = [d["temperature"] for svc, d in _climate_calls(hass) if svc == "set_temperature"]
     assert setpoints == [5.0]
 
@@ -124,7 +124,7 @@ async def test_a_retried_release_after_room_off_does_not_hand_the_target_back(ha
     hass.services.async_call.reset_mock()
     await coordinator._async_update_data()
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
     assert [c for c in _climate_calls(hass) if c[0] == "set_temperature"] == []
 
 
@@ -186,7 +186,7 @@ async def test_unload_releases_every_configured_valve(hass):
 
     _setup(hass, VALVE_ROOM, {})
     await _async_release_all_valves(hass)
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
     hass.data = {}
     await _async_release_all_valves(hass)
@@ -230,7 +230,7 @@ async def test_switching_climate_control_off_hands_the_room_target_back(hass, mo
         if c[0][0] == "climate" and c[0][1] == "set_temperature"
     ]
     assert setpoints == [21.0]
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio

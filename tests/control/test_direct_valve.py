@@ -77,12 +77,33 @@ def _controller(hass, room, *, has_external_sensor=True):
 
 
 @pytest.mark.asyncio
-async def test_pins_opening_and_complementary_closing():
+async def test_pins_heating_and_idle_opening_at_the_same_position():
     hass = _hass({OPEN: _number(), CLOSE: _number()})
 
     await async_set_valve(hass, TRV, OPEN, CLOSE, 30.4, area_id="a")
 
-    assert _number_calls(hass) == [(OPEN, 30.0), (CLOSE, 70.0)]
+    assert _number_calls(hass) == [(OPEN, 30.0), (CLOSE, 30.0)]
+
+
+@pytest.mark.asyncio
+async def test_idle_degree_is_an_opening_not_a_closing_degree():
+    """Regression: idle 100 opens a TRVZB fully. 100 - X there left the valve open with no demand."""
+    hass = _hass({OPEN: _number(), CLOSE: _number()})
+
+    await async_set_valve(hass, TRV, OPEN, CLOSE, 10, area_id="a")
+
+    assert _number_calls(hass) == [(OPEN, 10.0), (CLOSE, 10.0)]
+
+
+@pytest.mark.asyncio
+async def test_release_never_leaves_the_idle_opening_open():
+    """Regression: handing back with idle 100 kept the radiator heating without demand."""
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30)})
+    direct_valve._valve_sent[TRV] = direct_valve._Held(0.0, 30, None, OPEN, CLOSE)
+
+    await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")
+
+    assert (CLOSE, 0.0) in _number_calls(hass) and (CLOSE, 100.0) not in _number_calls(hass)
 
 
 @pytest.mark.asyncio
@@ -92,12 +113,12 @@ async def test_scales_to_the_entity_range():
 
     await async_set_valve(hass, TRV, OPEN, CLOSE, 100, area_id="a")
 
-    assert _number_calls(hass) == [(OPEN, 99.0), (CLOSE, 0.0)]
+    assert _number_calls(hass) == [(OPEN, 99.0), (CLOSE, 99.0)]
 
 
 @pytest.mark.asyncio
 async def test_value_the_entity_already_holds_is_not_sent():
-    hass = _hass({OPEN: _number(30), CLOSE: _number(70)})
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30)})
 
     await async_set_valve(hass, TRV, OPEN, CLOSE, 30, area_id="a")
 
@@ -112,7 +133,7 @@ async def test_changes_wait_for_the_dwell_unless_the_target_moves():
     hass = _hass(states)
     with patch.object(direct_valve, "_now", return_value=1000.0):
         await async_set_valve(hass, TRV, OPEN, CLOSE, 30, area_id="a", target=21.0)
-    states[OPEN], states[CLOSE] = _number(30), _number(70)
+    states[OPEN], states[CLOSE] = _number(70), _number(30)
     hass.services.async_call.reset_mock()
 
     with patch.object(direct_valve, "_now", return_value=1060.0):
@@ -122,13 +143,13 @@ async def test_changes_wait_for_the_dwell_unless_the_target_moves():
 
     with patch.object(direct_valve, "_now", return_value=1060.0):
         await async_set_valve(hass, TRV, OPEN, CLOSE, 60, area_id="a", target=22.0)
-    assert _number_calls(hass) == [(OPEN, 60.0), (CLOSE, 40.0)]
+    assert _number_calls(hass) == [(OPEN, 60.0), (CLOSE, 60.0)]
 
-    states[OPEN], states[CLOSE] = _number(60), _number(40)
+    states[OPEN], states[CLOSE] = _number(40), _number(60)
     hass.services.async_call.reset_mock()
     with patch.object(direct_valve, "_now", return_value=1060.0 + VALVE_DWELL_SECONDS):
         await async_set_valve(hass, TRV, OPEN, CLOSE, 45, area_id="a", target=22.0)
-    assert _number_calls(hass) == [(OPEN, 45.0), (CLOSE, 55.0)]
+    assert _number_calls(hass) == [(OPEN, 45.0), (CLOSE, 45.0)]
     assert direct_valve.held_opening(TRV) == 0.45
 
 
@@ -180,7 +201,7 @@ async def test_unusable_number_state_counts_as_unavailable():
 
 @pytest.mark.asyncio
 async def test_non_numeric_state_is_sent():
-    hass = _hass({OPEN: _number(state="idle"), CLOSE: _number(70)})
+    hass = _hass({OPEN: _number(state="idle"), CLOSE: _number(30)})
 
     await async_set_valve(hass, TRV, OPEN, CLOSE, 30, area_id="a")
 
@@ -188,19 +209,19 @@ async def test_non_numeric_state_is_sent():
 
 
 @pytest.mark.asyncio
-async def test_release_sets_both_to_their_maximum_and_forgets_the_position():
-    hass = _hass({OPEN: _number(30), CLOSE: _number(70)})
+async def test_release_restores_the_device_default_and_forgets_the_position():
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30)})
     direct_valve._valve_sent[TRV] = direct_valve._Held(0.0, 30, None, OPEN, CLOSE)
 
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
     assert TRV not in direct_valve._valve_sent
 
 
 @pytest.mark.asyncio
 async def test_release_of_an_unavailable_valve_stays_on_record():
-    hass = _hass({OPEN: _number(state="unavailable"), CLOSE: _number(70)})
+    hass = _hass({OPEN: _number(state="unavailable"), CLOSE: _number(30)})
     direct_valve._valve_sent[TRV] = direct_valve._Held(0.0, 30, 21.0, OPEN, CLOSE)
 
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")
@@ -210,20 +231,20 @@ async def test_release_of_an_unavailable_valve_stays_on_record():
 
 @pytest.mark.asyncio
 async def test_orphaned_valves_are_released():
-    hass = _hass({OPEN: _number(30), CLOSE: _number(70), "number.b": _number(30)})
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30), "number.b": _number(30)})
     direct_valve._valve_sent[TRV] = direct_valve._Held(0.0, 30, 21.0, OPEN, CLOSE)
     direct_valve._valve_sent["climate.b"] = direct_valve._Held(0.0, 30, 21.0, "number.b", "number.bc")
 
     await direct_valve.async_release_orphaned_valves(hass, {"climate.b": ("number.b", "number.bc")})
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
     assert direct_valve.held_opening(TRV) is None
     assert direct_valve.held_opening("climate.b") == 0.3
 
 
 @pytest.mark.asyncio
 async def test_release_of_a_released_valve_sends_nothing():
-    hass = _hass({OPEN: _number(100), CLOSE: _number(100)})
+    hass = _hass({OPEN: _number(100), CLOSE: _number(0)})
 
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")
 
@@ -246,7 +267,7 @@ async def test_heating_drives_the_valve_instead_of_a_boosted_setpoint():
         heating_boost_target=30.0,
     )
 
-    assert _number_calls(hass) == [(OPEN, 35.0), (CLOSE, 65.0)]
+    assert _number_calls(hass) == [(OPEN, 35.0), (CLOSE, 35.0)]
     # The proportional setpoint as on main: a later release without command leaves no boost behind
     [setpoint] = [c["temperature"] for c in _climate_calls(hass, "set_temperature")]
     assert 21.0 <= setpoint < 29.5
@@ -292,49 +313,49 @@ async def test_valve_trv_ignores_the_direct_setpoint_mode():
 
 @pytest.mark.asyncio
 async def test_idle_hands_the_valve_back():
-    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(65)})
+    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(35)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(MODE_IDLE, TargetTemps(heat=21.0, cool=24.0), power_fraction=0.0, current_temp=21.3)
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
     assert [c["hvac_mode"] for c in _climate_calls(hass, "set_hvac_mode")] == ["off"]
 
 
 @pytest.mark.asyncio
 async def test_cooling_hands_the_valve_back():
-    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(65)})
+    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(35)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(MODE_COOLING, TargetTemps(heat=21.0, cool=24.0), power_fraction=0.5, current_temp=25.0)
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
 async def test_managed_mode_uses_the_setpoint_and_releases_the_valve():
-    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(65)})
+    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(35)})
     ctrl = _controller(hass, _valve_room(climate_mode="heat_only"), has_external_sensor=False)
 
     await ctrl.async_apply(MODE_HEATING, TargetTemps(heat=21.0, cool=None), power_fraction=1.0, current_temp=None)
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
     assert [c["temperature"] for c in _climate_calls(hass, "set_temperature")] == [21.0]
 
 
 @pytest.mark.asyncio
 async def test_managed_auto_mode_releases_the_valve():
-    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(65)})
+    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(35)})
     ctrl = _controller(hass, _valve_room(), has_external_sensor=False)
 
     await ctrl.async_apply(MODE_HEATING, TargetTemps(heat=21.0, cool=24.0), power_fraction=1.0, current_temp=None)
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
 async def test_compressor_forced_off_trv_is_idled_and_released():
-    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(65)})
+    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(35)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(
@@ -345,12 +366,12 @@ async def test_compressor_forced_off_trv_is_idled_and_released():
         compressor_forced_off={TRV},
     )
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
 async def test_compressor_forced_off_while_cooling_releases():
-    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(65)})
+    hass = _hass({TRV: _trv(), OPEN: _number(35), CLOSE: _number(35)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(
@@ -361,7 +382,7 @@ async def test_compressor_forced_off_while_cooling_releases():
         compressor_forced_off={TRV},
     )
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 def _plan(active: bool, pf: float = 0.4) -> HeatSourcePlan:
@@ -385,25 +406,25 @@ async def test_orchestrated_active_trv_drives_the_valve():
         MODE_HEATING, TargetTemps(heat=21.0, cool=24.0), current_temp=20.5, heat_source_plan=_plan(True, 0.4)
     )
 
-    assert _number_calls(hass) == [(OPEN, 40.0), (CLOSE, 60.0)]
+    assert _number_calls(hass) == [(OPEN, 40.0), (CLOSE, 40.0)]
     assert len(_climate_calls(hass, "set_temperature")) == 1
 
 
 @pytest.mark.asyncio
 async def test_orchestrated_parked_trv_is_released():
-    hass = _hass({TRV: _trv(), OPEN: _number(40), CLOSE: _number(60)})
+    hass = _hass({TRV: _trv(), OPEN: _number(40), CLOSE: _number(40)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(
         MODE_HEATING, TargetTemps(heat=21.0, cool=24.0), current_temp=20.5, heat_source_plan=_plan(False)
     )
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
 async def test_orchestrated_forced_off_trv_is_released():
-    hass = _hass({TRV: _trv(), OPEN: _number(40), CLOSE: _number(60)})
+    hass = _hass({TRV: _trv(), OPEN: _number(40), CLOSE: _number(40)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(
@@ -414,7 +435,7 @@ async def test_orchestrated_forced_off_trv_is_released():
         compressor_forced_off={TRV},
     )
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
@@ -436,7 +457,7 @@ async def test_trv_without_valve_entities_is_unchanged():
 
 @pytest.mark.asyncio
 async def test_compressor_hold_runs_the_valve_at_the_minimum():
-    hass = _hass({TRV: _trv(), OPEN: _number(60), CLOSE: _number(40)})
+    hass = _hass({TRV: _trv(), OPEN: _number(60), CLOSE: _number(60)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(
@@ -447,13 +468,13 @@ async def test_compressor_hold_runs_the_valve_at_the_minimum():
         compressor_forced_on={TRV},
     )
 
-    assert _number_calls(hass) == [(OPEN, 15.0), (CLOSE, 85.0)]
+    assert _number_calls(hass) == [(OPEN, 15.0), (CLOSE, 15.0)]
     assert _climate_calls(hass, "set_temperature") == []
 
 
 @pytest.mark.asyncio
 async def test_orchestrated_parked_trv_in_a_hold_runs_at_the_minimum():
-    hass = _hass({TRV: _trv(), OPEN: _number(60), CLOSE: _number(40)})
+    hass = _hass({TRV: _trv(), OPEN: _number(60), CLOSE: _number(60)})
     ctrl = _controller(hass, _valve_room())
 
     await ctrl.async_apply(
@@ -464,7 +485,7 @@ async def test_orchestrated_parked_trv_in_a_hold_runs_at_the_minimum():
         compressor_forced_on={TRV},
     )
 
-    assert _number_calls(hass) == [(OPEN, 15.0), (CLOSE, 85.0)]
+    assert _number_calls(hass) == [(OPEN, 15.0), (CLOSE, 15.0)]
 
 
 @pytest.mark.asyncio
@@ -486,21 +507,21 @@ async def test_hold_of_a_setpoint_trv_is_unchanged():
 @pytest.mark.asyncio
 async def test_a_held_valve_is_released_even_if_its_state_lags():
     """Z2M reports the new degrees only with the device's echo: the state may still say 100."""
-    hass = _hass({OPEN: _number(100), CLOSE: _number(100)})
+    hass = _hass({OPEN: _number(100), CLOSE: _number(0)})
     direct_valve._valve_sent[TRV] = direct_valve._Held(0.0, 30, 21.0, OPEN, CLOSE)
 
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")
 
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
 
 @pytest.mark.asyncio
 async def test_a_valve_not_held_is_checked_once_and_then_left_alone():
     """Degrees set by hand while RoomMind does not control the TRV stay."""
-    states = {OPEN: _number(30), CLOSE: _number(70)}
+    states = {OPEN: _number(30), CLOSE: _number(30)}
     hass = _hass(states)
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")
-    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 100.0)]
+    assert _number_calls(hass) == [(OPEN, 100.0), (CLOSE, 0.0)]
 
     states[OPEN] = _number(60)
     hass.services.async_call.reset_mock()
@@ -510,7 +531,7 @@ async def test_a_valve_not_held_is_checked_once_and_then_left_alone():
 
 @pytest.mark.asyncio
 async def test_hand_back_sets_the_room_target_on_the_trv():
-    hass = _hass({OPEN: _number(30), CLOSE: _number(70)})
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30)})
     hass.config.units.temperature_unit = "°C"
     direct_valve._valve_sent[TRV] = direct_valve._Held(0.0, 30, 21.0, OPEN, CLOSE)
 
@@ -521,7 +542,7 @@ async def test_hand_back_sets_the_room_target_on_the_trv():
 
 @pytest.mark.asyncio
 async def test_hand_back_without_a_held_valve_sends_no_setpoint():
-    hass = _hass({OPEN: _number(30), CLOSE: _number(70)})
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30)})
 
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a", hand_back=True)
 
@@ -530,7 +551,7 @@ async def test_hand_back_without_a_held_valve_sends_no_setpoint():
 
 @pytest.mark.asyncio
 async def test_hand_back_failure_is_logged(caplog):
-    hass = _hass({OPEN: _number(30), CLOSE: _number(70)})
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30)})
     hass.config.units.temperature_unit = "°C"
     direct_valve._valve_sent[TRV] = direct_valve._Held(0.0, 30, 21.0, OPEN, CLOSE)
 
@@ -546,7 +567,7 @@ async def test_hand_back_failure_is_logged(caplog):
 
 @pytest.mark.asyncio
 async def test_after_unload_nothing_is_pinned_until_the_next_setup(caplog):
-    hass = _hass({OPEN: _number(30), CLOSE: _number(70), "number.o": _number(30), "number.c": _number(70)})
+    hass = _hass({OPEN: _number(30), CLOSE: _number(30), "number.o": _number(30), "number.c": _number(30)})
     hass.config.units.temperature_unit = "°C"
     direct_valve._valve_sent["climate.orphan"] = direct_valve._Held(0.0, 30, 21.0, "number.o", "number.c")
 
@@ -574,19 +595,19 @@ async def test_urgent_changes_skip_the_dwell():
         await async_set_valve(hass, TRV, OPEN, CLOSE, 80, area_id="a", target=21.0)
         hass.services.async_call.reset_mock()
         await async_set_valve(hass, TRV, OPEN, CLOSE, 15, area_id="a", target=21.0, urgent=True)
-    assert _number_calls(hass) == [(OPEN, 15.0), (CLOSE, 85.0)]
+    assert _number_calls(hass) == [(OPEN, 15.0), (CLOSE, 15.0)]
 
 
 @pytest.mark.asyncio
 async def test_a_half_applied_position_after_the_idle_check_is_released():
     """Checked while idle, then one degree went out and the other failed: still released."""
-    states = {OPEN: _number(100), CLOSE: _number(100)}
+    states = {OPEN: _number(100), CLOSE: _number(0)}
     hass = _hass(states)
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")  # idle check at start
 
     states[CLOSE] = _number(state="unavailable")
     await async_set_valve(hass, TRV, OPEN, CLOSE, 30, area_id="a")
-    states[OPEN], states[CLOSE] = _number(30), _number(100)
+    states[OPEN], states[CLOSE] = _number(70), _number(0)
     hass.services.async_call.reset_mock()
 
     await async_release_valve(hass, TRV, OPEN, CLOSE, area_id="a")

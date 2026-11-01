@@ -1,9 +1,12 @@
 """Direct valve control: hold a TRV valve at a set opening through number entities (#413).
 
-TRVs like the SONOFF TRVZB expose an opening degree (how far the valve opens when the TRV
-wants heat) and a closing degree (how far it closes when it does not). Opening X with
-closing 100 - X pins the valve at X % whatever the TRV's own controller decides. Both at
-their maximum is the device default, a normal TRV.
+TRVs like the SONOFF TRVZB expose two opening percentages: how far the valve opens while
+the TRV heats (``valveOpeningDegree``, Z2M "Heating valve position") and how far it stays
+open while it does not (``valveClosingDegree``, Z2M "Idle valve position": "Valve opening
+percentage when not heating"). Despite its name the second one is an opening, not a closing
+degree: on a dismounted TRVZB, idle 100 drives the plunger fully in, the valve fully open
+(2026-11-01). Both at X pins the valve at X % whatever the TRV's own controller decides; opening 100 /
+idle 0 is the device default, a normal on/off TRV.
 """
 
 from __future__ import annotations
@@ -28,6 +31,11 @@ class _Held(NamedTuple):
     opening_eid: str
     closing_eid: str
 
+
+# Device default the valve is handed back to: fully open while the TRV heats, closed while idle.
+# Idle 100 would leave the radiator heating with no demand (the idle degree is an opening).
+RELEASED_HEATING_PCT = 100
+RELEASED_IDLE_PCT = 0
 
 # climate entity -> last position that reached the device
 _valve_sent: dict[str, _Held] = {}
@@ -153,7 +161,7 @@ async def async_set_valve(
     _checked.discard(climate_eid)
     results = [
         await _async_set_number(hass, opening_eid, pct, area_id),
-        await _async_set_number(hass, closing_eid, 100 - pct, area_id),
+        await _async_set_number(hass, closing_eid, pct, area_id),
     ]
     if None in results:
         # Try again next cycle; a half-applied position is not remembered as held
@@ -171,7 +179,7 @@ async def async_release_valve(
     area_id: str,
     hand_back: bool = False,
 ) -> None:
-    """Hand the valve back to the TRV: both degrees to their maximum, the device default.
+    """Hand the valve back to the TRV: opening 100 while heating, 0 while idle, the device default.
 
     A valve RoomMind holds is always sent (its state may still show the old degrees or
     lag behind the last send) and stays on record until the entities answered. One it
@@ -185,7 +193,10 @@ async def async_release_valve(
     if held is None and climate_eid in _checked:
         return
     force = held is not None
-    results = [await _async_set_number(hass, eid, 100, area_id, force=force) for eid in (opening_eid, closing_eid)]
+    results = [
+        await _async_set_number(hass, eid, pct, area_id, force=force)
+        for eid, pct in ((opening_eid, RELEASED_HEATING_PCT), (closing_eid, RELEASED_IDLE_PCT))
+    ]
     if None in results:
         return
     _valve_sent.pop(climate_eid, None)
