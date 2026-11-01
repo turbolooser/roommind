@@ -382,3 +382,66 @@ async def test_a_running_room_shows_no_setback(monkeypatch):
     await ctrl.async_apply(MODE_HEATING, HEAT_TARGETS, power_fraction=0.5, current_temp=20.0)
 
     assert ctrl.setback_display() is None
+
+
+# ---------------------------------------------------------------------------
+# Fork staged idle (idle_off_after_minutes) next to #255 setback_auto_off
+# ---------------------------------------------------------------------------
+
+
+def _fake_monotonic(monkeypatch) -> dict[str, float]:
+    clock = {"t": 1000.0}
+    monkeypatch.setattr("custom_components.roommind.control.mpc_controller.time.monotonic", lambda: clock["t"])
+    return clock
+
+
+async def _idle_cycle(ctrl, idle_off_after_minutes: float) -> None:
+    mode, _ = ctrl._evaluate_mpc(21.3, HEAT_TARGETS)
+    assert mode == MODE_IDLE
+    await ctrl.async_apply(
+        mode, HEAT_TARGETS, power_fraction=0.0, current_temp=21.3, idle_off_after_minutes=idle_off_after_minutes
+    )
+
+
+@pytest.mark.asyncio
+async def test_staged_idle_still_turns_off_a_setback_device_without_auto_off(monkeypatch):
+    """Staged idle is the fork's own off switch and does not depend on the #255 opt-in."""
+    clock = _fake_monotonic(monkeypatch)
+    hass, ctrl = _controller("heat", 21.0, [MODE_IDLE] * 36, monkeypatch, auto_off=False)
+
+    await _idle_cycle(ctrl, 30)
+    assert not _turned_off(hass)
+    assert 19.0 in [d["temperature"] for d in _calls(hass, "set_temperature")]
+
+    clock["t"] += 30 * 60 - 1
+    await _idle_cycle(ctrl, 30)
+    assert not _turned_off(hass)
+
+    clock["t"] += 2
+    await _idle_cycle(ctrl, 30)
+    assert _turned_off(hass)
+
+
+@pytest.mark.asyncio
+async def test_setback_stays_without_auto_off_and_without_staged_idle(monkeypatch):
+    """Upstream multisplit-setback-stays: staged idle off and no opt-in, the setback holds for hours."""
+    clock = _fake_monotonic(monkeypatch)
+    hass, ctrl = _controller("heat", 21.0, [MODE_IDLE] * 36, monkeypatch, auto_off=False)
+
+    for _ in range(4):
+        await _idle_cycle(ctrl, 0)
+        clock["t"] += 3 * 3600
+
+    assert not _turned_off(hass)
+    assert 19.0 in [d["temperature"] for d in _calls(hass, "set_temperature")]
+
+
+@pytest.mark.asyncio
+async def test_auto_off_release_does_not_wait_for_staged_idle(monkeypatch):
+    """With the opt-in the #255 release ends the setback at once, before the staged-idle timeout."""
+    _fake_monotonic(monkeypatch)
+    hass, ctrl = _controller("heat", 21.0, [MODE_IDLE] * 36, monkeypatch, auto_off=True)
+
+    await _idle_cycle(ctrl, 120)
+
+    assert _turned_off(hass)
