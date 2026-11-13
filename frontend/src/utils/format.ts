@@ -15,11 +15,22 @@ export function formatNumber(
   }).format(value);
 }
 
+/**
+ * Decimals for measured values (room/sensor/device/outdoor readings, chart tooltip) — fork:
+ * a 0.01 K sensor must not look like it moves in 0.1 K steps. Targets keep their own precision.
+ */
+export const MEASURED_DECIMALS = 2;
+
 /** 0-100 as a percentage in the user's language ("48 %" in German, "48%" in English). */
-export function formatPercent(value: number, hass: Pick<HomeAssistant, "language">): string {
+export function formatPercent(
+  value: number,
+  hass: Pick<HomeAssistant, "language">,
+  decimals = 0,
+): string {
   return new Intl.NumberFormat(hass.language, {
     style: "percent",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(value / 100);
 }
 

@@ -14,7 +14,7 @@ import {
 } from "../../utils/room-state";
 import { localize } from "../../utils/localize";
 import { formatTempLocale, tempUnit, toDisplayDelta } from "../../utils/temperature";
-import { formatMinutes, formatNumber, formatPercent } from "../../utils/format";
+import { formatMinutes, formatNumber, formatPercent, MEASURED_DECIMALS } from "../../utils/format";
 import { buildSparkline, type RecentTemp, type SparklinePaths } from "../../utils/sparkline";
 import { NO_OVERRIDE, type EffectiveOverride } from "../../utils/override";
 import { boostHoursLeft } from "../../utils/learning";
@@ -512,7 +512,7 @@ export class RsRoomHero extends LitElement {
           ><ha-icon icon="mdi:water-percent" aria-hidden="true"></ha-icon>${localize(
             "detail.hero.humidity",
             l,
-            { value: formatPercent(live.current_humidity, this.hass) },
+            { value: formatPercent(live.current_humidity, this.hass, MEASURED_DECIMALS) },
           )}</span
         >`,
       );
@@ -523,7 +523,9 @@ export class RsRoomHero extends LitElement {
           ><ha-icon icon="mdi:thermometer-lines" aria-hidden="true"></ha-icon>${localize(
             "detail.hero.outdoor",
             l,
-            { value: `${formatTempLocale(this.outdoorTemp, this.hass)} ${unit}` },
+            {
+              value: `${formatTempLocale(this.outdoorTemp, this.hass, MEASURED_DECIMALS)} ${unit}`,
+            },
           )}</span
         >`,
       );
@@ -594,7 +596,9 @@ export class RsRoomHero extends LitElement {
       ${
         live.current_temp != null
           ? html`<div class="now">
-              ${formatTempLocale(live.current_temp, this.hass)}<small>${unit}</small>
+              ${formatTempLocale(live.current_temp, this.hass, MEASURED_DECIMALS)}<small
+                >${unit}</small
+              >
             </div>`
           : html`<div class="now none">--</div>`
       }

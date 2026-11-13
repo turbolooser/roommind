@@ -5,7 +5,7 @@ import { getEntitiesForArea } from "../utils/room-state";
 import { localize } from "../utils/localize";
 import { getSelectValue, openEntityInfo } from "../utils/events";
 import { tempUnit } from "../utils/temperature";
-import { formatMinutes, formatNumber, formatPercent } from "../utils/format";
+import { formatMinutes, formatNumber, formatPercent, MEASURED_DECIMALS } from "../utils/format";
 import { tokens } from "../styles/tokens";
 import { inputStyles } from "../styles/input-styles";
 import { formStyles } from "../styles/form-styles";
@@ -296,14 +296,14 @@ export class RsSensorSection extends LitElement {
     if (raw == null || raw === "" || !Number.isFinite(num)) {
       return st ? localize("detail.devices.unavailable", this.hass.language) : "";
     }
-    return `${formatNumber(num, this.hass, 1)}\u00a0${tempUnit(this.hass)}`;
+    return `${formatNumber(num, this.hass, MEASURED_DECIMALS)}\u00a0${tempUnit(this.hass)}`;
   }
 
   private _humidityValue(entityId: string): string {
     const st = this.hass.states[entityId];
     const num = Number(st?.state);
     if (st?.state != null && st.state !== "" && Number.isFinite(num))
-      return formatPercent(num, this.hass);
+      return formatPercent(num, this.hass, MEASURED_DECIMALS);
     return st ? localize("detail.devices.unavailable", this.hass.language) : "";
   }
 

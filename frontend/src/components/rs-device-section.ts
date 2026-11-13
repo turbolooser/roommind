@@ -6,7 +6,7 @@ import { localize } from "../utils/localize";
 import { getSelectValue, openEntityInfo } from "../utils/events";
 import { tempUnit, toDisplayDelta } from "../utils/temperature";
 import { fanModeLabel, resolveHeatingSystemType } from "../utils/device-utils";
-import { formatMinutes, formatNumber } from "../utils/format";
+import { formatMinutes, formatNumber, MEASURED_DECIMALS } from "../utils/format";
 import { tokens } from "../styles/tokens";
 import { inputStyles } from "../styles/input-styles";
 import { formStyles } from "../styles/form-styles";
@@ -336,7 +336,9 @@ export class RsDeviceSection extends LitElement {
     const ct = attrs.current_temperature;
     // Device readings are already in Home Assistant's unit.
     const temp =
-      typeof ct === "number" ? `${formatNumber(ct, this.hass, 1)}\u00a0${tempUnit(this.hass)}` : "";
+      typeof ct === "number"
+        ? `${formatNumber(ct, this.hass, MEASURED_DECIMALS)}\u00a0${tempUnit(this.hass)}`
+        : "";
     const value = [status, temp].filter(Boolean).join(" · ");
 
     return html`<rs-list-row
@@ -401,7 +403,9 @@ export class RsDeviceSection extends LitElement {
     const ct = st.attributes?.current_temperature;
     // Device readings are already in Home Assistant's unit.
     const temp =
-      typeof ct === "number" ? `${formatNumber(ct, this.hass, 1)}\u00a0${tempUnit(this.hass)}` : "";
+      typeof ct === "number"
+        ? `${formatNumber(ct, this.hass, MEASURED_DECIMALS)}\u00a0${tempUnit(this.hass)}`
+        : "";
     return { text, color, temp };
   }
 
