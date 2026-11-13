@@ -155,3 +155,42 @@ async def test_controller_passes_the_valve_demand(monkeypatch):
         assert (seen["valve_demand"] is not None) is expected
         if expected:
             assert 0.0 <= seen["valve_demand"](21.0) <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_controller_drives_the_valve_by_the_lead(monkeypatch):
+    from custom_components.roommind.const import TargetTemps
+    from custom_components.roommind.managers.valve_lead_tracker import ValveLead
+
+    seen = {}
+
+    def fake_decide(*args, **kwargs):
+        seen.update(kwargs)
+        return MODE_HEATING, 0.4
+
+    monkeypatch.setattr("custom_components.roommind.control.mpc_controller.decide_mpc_action", fake_decide)
+    room = make_room()
+    room["devices"] = [TRV]
+    room["thermostats"] = ["climate.trv"]
+    hass = build_hass()
+    hass.states.get = MagicMock(return_value=None)
+    ctrl = MPCController(
+        hass,
+        room,
+        model_manager=RoomModelManager(),
+        outdoor_temp=5.0,
+        settings={},
+        has_external_sensor=True,
+        valve_lead=ValveLead(minutes=10.0, trend=-0.02, trim=0.1),
+    )
+    ctrl._evaluate_mpc(20.5, TargetTemps(heat=21.0, cool=24.0))
+    assert seen["valve_lead_temp"] == pytest.approx(20.3)
+    assert ctrl.valve_feedback is not None
+    band, raw = ctrl.valve_feedback
+    assert band >= VALVE_PROPORTIONAL_BAND_K
+    assert min(1.0, max(0.0, raw)) == pytest.approx(seen["valve_demand"](21.0))
+    # Without a lead the valve follows the reading and reports nothing
+    plain = _controller([TRV])
+    plain._evaluate_mpc(20.5, TargetTemps(heat=21.0, cool=24.0))
+    assert seen["valve_lead_temp"] is None
+    assert plain.valve_feedback is None

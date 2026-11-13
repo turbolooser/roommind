@@ -119,6 +119,7 @@ from .managers.mold_manager import MoldManager
 from .managers.price_manager import PriceManager
 from .managers.recent_temps import RECENT_WINDOW_S, RecentTemps
 from .managers.residual_heat_tracker import AcReboundTracker, ResidualHeatLearner, ResidualHeatTracker
+from .managers.valve_lead_tracker import ValveLeadTracker
 from .managers.valve_manager import ValveManager
 from .managers.weather_manager import WeatherManager
 from .managers.window_manager import WindowManager
@@ -318,6 +319,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         self._residual_tracker = ResidualHeatTracker()
         # Learns each room's residual scale from the afterglow after every run
         self._residual_learner = ResidualHeatLearner()
+        self._valve_lead_tracker = ValveLeadTracker()
         # AC rebound charge (air pulled below the building mass while cooling)
         self._rebound_tracker = AcReboundTracker()
         # Offset of each AC's own sensor from the room sensor while it runs (setpoints in the device's frame)
@@ -454,6 +456,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             self._coil_dry_manager.load_state(settings.get("coil_dry_state", {}))
             self._head_offsets.load_state(settings.get("ac_head_offsets", {}))
             self._ventilation.load_state(settings.get("ventilation_state", {}))
+            self._valve_lead_tracker.load_state(settings.get("valve_lead", {}))
             self._model_loaded = True
 
         # Initialize history store (once)
@@ -644,6 +647,11 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         if self._head_offsets.dirty and self._thermal_save_count == 0:
             await store.async_save_settings({"ac_head_offsets": self._head_offsets.get_state()})
             self._head_offsets.dirty = False
+        # Learned valve lead and trim: a restart must not cost hours of relearning
+        self._valve_lead_tracker.prune(set(stored_rooms))
+        if self._valve_lead_tracker.dirty and self._thermal_save_count == 0:
+            await store.async_save_settings({"valve_lead": self._valve_lead_tracker.get_state()})
+            self._valve_lead_tracker.dirty = False
 
         # Coil dry: drop state for devices no longer configured anywhere
         self._coil_dry_manager.prune(set(build_rooms_devices_map(stored_rooms)))
@@ -1169,6 +1177,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             previous_heat_sources=self._heat_source_states.get(area_id, "none"),
             head_offsets=self._head_offsets,
             price_level=self._price_level_for(room),
+            valve_lead=self._valve_lead_tracker.get(area_id),
         )
         mode, power_fraction = await controller.async_evaluate(current_temp, targets)
 
@@ -1619,6 +1628,12 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 )
             except Exception:  # noqa: BLE001
                 mpc_active = False
+
+        if controller.valve_feedback is not None and current_temp is not None:
+            band, raw_demand = controller.valve_feedback
+            self._valve_lead_tracker.update(
+                area_id, time.time(), current_temp, mode, targets.heat, band=band, raw_demand=raw_demand
+            )
 
         display_mode, display_pf = await self._observe_and_train(
             area_id=area_id,
@@ -3044,6 +3059,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         self._pending_predictions.pop(area_id, None)
         self._residual_tracker.remove_room(area_id)
         self._residual_learner.remove_room(area_id)
+        self._valve_lead_tracker.remove_room(area_id)
         self._rebound_tracker.remove_room(area_id)
         self._cover_orchestrator.remove_room(area_id)
         self._entity_areas.discard(area_id)
@@ -3120,6 +3136,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         self._ekf_training.last_temps.pop(area_id, None)
         self._residual_tracker.clear_room(area_id)
         self._residual_learner.remove_room(area_id)
+        self._valve_lead_tracker.clear_room(area_id)
 
     def reset_thermal_all(self) -> list[str]:
         """Reset all thermal models. Returns list of affected room IDs."""
@@ -3130,6 +3147,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         self._ekf_training.last_temps.clear()
         self._residual_tracker.clear_all()
         self._residual_learner.clear_all()
+        self._valve_lead_tracker.clear_all()
         return room_ids
 
     def boost_learning(self, area_id: str) -> int | None:
