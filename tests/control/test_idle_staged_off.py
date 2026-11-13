@@ -131,3 +131,43 @@ async def test_setback_offset_configurable(monkeypatch):
     mc._idle_cfg["setback_offset"] = 3.0
     await async_idle_device(hass, ENTITY, DEVICES, area_id="t", targets=TargetTemps(heat=21.0, cool=None))
     assert _setpoint_calls(hass)[0][0][2]["temperature"] == 18.0  # 21 - 3
+
+
+def _display_controller(hass):
+    room = make_room(thermostats=[], acs=[ENTITY])
+    room["devices"] = DEVICES
+    return MPCController(hass, room, model_manager=RoomModelManager(), outdoor_temp=5.0, settings={})
+
+
+def test_setback_display_shows_the_staged_off_time(monkeypatch):
+    """#509 display: a device held at its setback shows when staged idle switches it off."""
+    clock = _fake_clock(monkeypatch)
+    monkeypatch.setattr(mc.time, "time", lambda: 50_000.0)
+    mc._idle_cfg["off_after_minutes"] = 30
+    mc._idle_setback_since[ENTITY] = clock["t"] - 600  # in setback for 10 min
+    ctrl = _display_controller(build_hass())
+    ctrl.setback_eids = [ENTITY]
+
+    assert ctrl.setback_display() == {"devices": [ENTITY], "until": pytest.approx(50_000.0 + 20 * 60)}
+
+
+def test_setback_display_without_staged_idle_shows_no_time(monkeypatch):
+    """Staged idle off (0) and no setback_auto_off: held, no switch-off time (upstream behaviour)."""
+    clock = _fake_clock(monkeypatch)
+    mc._idle_setback_since[ENTITY] = clock["t"]
+    ctrl = _display_controller(build_hass())
+    ctrl.setback_eids = [ENTITY]
+
+    assert ctrl.setback_display() == {"devices": [ENTITY], "until": None}
+
+
+def test_staged_off_time_waits_for_every_held_device(monkeypatch):
+    """A device whose setback timer has not started yet gives no time; otherwise the last one counts."""
+    clock = _fake_clock(monkeypatch)
+    monkeypatch.setattr(mc.time, "time", lambda: 50_000.0)
+    mc._idle_cfg["off_after_minutes"] = 30
+    mc._idle_setback_since["climate.a"] = clock["t"] - 900
+    assert mc.staged_idle_off_at(["climate.a", "climate.b"]) is None
+    mc._idle_setback_since["climate.b"] = clock["t"] - 60
+    assert mc.staged_idle_off_at(["climate.a", "climate.b"]) == pytest.approx(50_000.0 + 29 * 60)
+    assert mc.staged_idle_off_at([]) is None

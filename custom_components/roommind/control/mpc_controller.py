@@ -160,6 +160,23 @@ _idle_setback_since: dict[str, float] = {}
 _idle_cfg: dict[str, float] = {"off_after_minutes": 0.0, "setback_offset": DEFAULT_IDLE_SETBACK_OFFSET}
 
 
+def staged_idle_off_at(entity_ids: list[str]) -> float | None:
+    """Wall-clock time by which staged idle has switched all ``entity_ids`` off (fork).
+
+    None while staged idle is disabled or a device has not entered its setback yet. The
+    timers run on the monotonic clock (see ``_idle_setback_since``), shifted here to
+    wall time for the display.
+    """
+    off_after_s = _idle_cfg["off_after_minutes"] * 60.0
+    if off_after_s <= 0 or not entity_ids:
+        return None
+    since = [_idle_setback_since.get(eid) for eid in entity_ids]
+    if any(s is None for s in since):
+        return None
+    latest = max(s for s in since if s is not None)
+    return time.time() + (latest + off_after_s - time.monotonic())
+
+
 def _cache_entry(service: str, data: dict) -> dict[str, Any]:
     """Build a cache entry from a service call."""
     return {
@@ -2830,6 +2847,8 @@ class MPCController:
 
         ``until`` only while every held device has setback_auto_off and the room runs on
         the MPC plan; from then on the plan decides each cycle, so no time is shown.
+        Fork: staged idle (``idle_off_after_minutes``) switches every held device off at a
+        fixed time, so that time is shown too; the earlier of both applies.
         """
         if not self.setback_eids:
             return None
@@ -2837,8 +2856,11 @@ class MPCController:
         if self._planned and all(get_setback_auto_off(self._devices, eid) for eid in self.setback_eids):
             idle_since = self._idle_since if self._idle_since is not None else time.time()
             until = idle_since + SETBACK_HOLD_MINUTES * 60
-            if until <= time.time():
-                until = None
+        staged = staged_idle_off_at(self.setback_eids)
+        if staged is not None:
+            until = staged if until is None else min(until, staged)
+        if until is not None and until <= time.time():
+            until = None
         return {"devices": list(self.setback_eids), "until": until}
 
     def _release_setback_for(self, eid: str, sitting_out: set[str]) -> frozenset[str]:
