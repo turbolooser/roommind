@@ -14,7 +14,7 @@ import {
 import { localize } from "../../utils/localize";
 import { errorText } from "../../utils/errors";
 import { formatTempLocale, tempUnit, toDisplayDelta } from "../../utils/temperature";
-import { formatPercent } from "../../utils/format";
+import { formatPercent, MEASURED_DECIMALS } from "../../utils/format";
 import { buildSparkline, type SparklinePaths, type RecentTemp } from "../../utils/sparkline";
 import { quickMessage, quickOptions, quickValueOf, type QuickValue } from "../../utils/override";
 import { tokens, srOnly } from "../../styles/tokens";
@@ -511,7 +511,7 @@ export class RsRoomCard extends LitElement {
       ${
         temp != null
           ? html`<span class="now"
-              >${formatTempLocale(temp, this.hass)}<small>${unit}</small></span
+              >${formatTempLocale(temp, this.hass, MEASURED_DECIMALS)}<small>${unit}</small></span
             >`
           : html`<span class="now none">--</span>`
       }
@@ -520,11 +520,12 @@ export class RsRoomCard extends LitElement {
           ? html`<span
               class="hum"
               aria-label=${localize("card.humidity", this._lang, {
-                value: formatPercent(hum, { language: this._lang }),
+                value: formatPercent(hum, { language: this._lang }, MEASURED_DECIMALS),
               })}
               ><ha-icon icon="mdi:water-percent" aria-hidden="true"></ha-icon>${formatPercent(
                 hum,
                 this.hass,
+                MEASURED_DECIMALS,
               )}</span
             >`
           : nothing

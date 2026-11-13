@@ -4,7 +4,7 @@
 import type { AnalyticsDataPoint } from "../types";
 import { localize, type TranslationKey } from "./localize";
 import { tempUnit, toDisplay, toDisplayDelta } from "./temperature";
-import { formatNumber, formatPercent } from "./format";
+import { formatNumber, formatPercent, MEASURED_DECIMALS } from "./format";
 import { formatClock, formatDayTime, haTimeZone, sameDayInZone } from "./analytics-time";
 import type { HomeAssistant } from "../types";
 import { HUMIDITY_LEVELS, humidityAxis, humidityLevel } from "./humidity";
@@ -762,7 +762,7 @@ export function buildChartOptions(
       trigger: "axis",
       axisPointer: { snap: false },
       valueFormatter: (v: number | null) =>
-        v == null ? "" : `${formatNumber(v, hass, 1)}\u00A0${unit}`,
+        v == null ? "" : `${formatNumber(v, hass, MEASURED_DECIMALS)}\u00A0${unit}`,
       formatter: (
         params: Array<{
           seriesName: string;
@@ -811,7 +811,7 @@ export function buildChartOptions(
           }
           const v = p.value?.[1];
           if (v == null) continue;
-          let value = `${formatNumber(v, hass, 1)}\u00A0${unit}`;
+          let value = `${formatNumber(v, hass, MEASURED_DECIMALS)}\u00A0${unit}`;
           if (sid === "humidity") {
             const level = humidityLevel(v);
             value = `${Math.round(v)}\u00A0%`;
