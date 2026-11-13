@@ -107,6 +107,8 @@ The fork adds a **learned lead** per room, with nothing to configure:
 Lead, trim and the number of turning points are **saved with the thermal data** (every ~15 min) and survive restarts. They are relearned after a thermal reset, or when three turning points in a row miss the learned lead by more than half on the same side (radiator, sensor or room changed). The live values are in the diagnostics under `valve_lead`. In a closed-loop test fitted to that room, the reading-driven valve overshot by 0.7 K with a 1.2 K span; with the lead it stays within +0.1 K and a 0.2 K span. Setpoint TRVs and AC heating are unchanged.
 
 ### 13. Panel fixes
+Measured values show **two decimals** everywhere in the panel: room temperature and humidity (cards and hero), sensor and device readings, outdoor temperature and the chart tooltip. A 0.01 K sensor no longer looks like it jumps in 0.1 K steps. Targets (comfort/eco, 0.5 steps) keep one decimal.
+
 HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
 
 The panel's `js_url` also carries a `?v=<version>` cache buster. Upstream registers it under an URL that is identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.

@@ -605,7 +605,7 @@ export class RsHeroStatus extends LitElement {
                     live.current_temp !== null
                       ? html`
                           <span class="hero-current"
-                            >${formatTemp(live.current_temp, this.hass)}</span
+                            >${formatTemp(live.current_temp, this.hass, 2)}</span
                           >
                           <span class="hero-unit">${tempUnit(this.hass)}</span>
                         `
@@ -618,7 +618,7 @@ export class RsHeroStatus extends LitElement {
                     ? html`<div class="hero-metric">
                         <ha-icon icon="mdi:water-percent"></ha-icon>
                         ${localize("hero.humidity", this.hass?.language ?? "en", {
-                          value: live.current_humidity.toFixed(0),
+                          value: live.current_humidity.toFixed(2),
                         })}
                       </div>`
                     : nothing
