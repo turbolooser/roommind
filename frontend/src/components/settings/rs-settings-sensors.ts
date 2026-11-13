@@ -61,7 +61,7 @@ export class RsSettingsSensors extends RsSettingsBase {
               outdoorTemp !== null
                 ? html`<div class="current-value">
                     ${localize("settings.outdoor_current", l, {
-                      temp: outdoorTemp.toFixed(1),
+                      temp: outdoorTemp.toFixed(2),
                       unit: tempUnit(this.hass),
                     })}
                   </div>`

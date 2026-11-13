@@ -492,10 +492,10 @@ export class RsSensorSection extends LitElement {
     if (type === "temp") {
       const tempVal = entityId.startsWith("climate.") ? attrs.current_temperature : state;
       if (tempVal != null && tempVal !== "" && tempVal !== "unknown" && tempVal !== "unavailable")
-        displayValue = `${Number(tempVal).toFixed(1)}${tempUnit(this.hass)}`;
+        displayValue = `${Number(tempVal).toFixed(2)}${tempUnit(this.hass)}`;
     } else {
       if (state && state !== "unknown" && state !== "unavailable")
-        displayValue = `${Math.round(Number(state))}%`;
+        displayValue = `${Number(state).toFixed(2)}%`;
     }
 
     return html`
@@ -875,9 +875,7 @@ export class RsSensorSection extends LitElement {
       ? state?.attributes?.current_temperature
       : state?.state;
     const hasValue = currentValue && currentValue !== "unknown" && currentValue !== "unavailable";
-    const formatted = hasValue
-      ? `${kind === "humidity" ? Math.round(Number(currentValue)) : Number(currentValue).toFixed(1)}${unit}`
-      : "";
+    const formatted = hasValue ? `${Number(currentValue).toFixed(2)}${unit}` : "";
 
     return html`
       <div

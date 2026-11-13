@@ -263,7 +263,7 @@ export function buildChartOptions(
     tooltip: {
       trigger: "axis",
       axisPointer: { snap: false },
-      valueFormatter: (v: number) => v.toFixed(1) + "\u00A0" + unit,
+      valueFormatter: (v: number) => v.toFixed(2) + "\u00A0" + unit,
       formatter: (
         params: Array<{
           seriesName: string;
@@ -282,7 +282,7 @@ export function buildChartOptions(
           if ((p.seriesId as string)?.endsWith("_events")) continue;
           const v = p.value?.[1];
           if (v == null) continue;
-          markup += `<div>${p.color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>` : ""}${p.seriesName}: ${v.toFixed(1)}\u00A0${unit}</div>`;
+          markup += `<div>${p.color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:6px"></span>` : ""}${p.seriesName}: ${v.toFixed(2)}\u00A0${unit}</div>`;
           if (p.seriesId === "room_temp") roomVal = v;
           if (p.seriesId === "predicted_temp") predVal = v;
         }
