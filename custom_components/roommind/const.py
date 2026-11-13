@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Context
 
 DOMAIN = "roommind"
-VERSION = "1.8.7"
+VERSION = "1.8.8"
 
 # Platforms
 PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.BINARY_SENSOR, Platform.CLIMATE]
@@ -113,6 +113,20 @@ VALVE_DWELL_SECONDS = 600  # Minimum time a valve position stays before a small 
 VALVE_DEADBAND_PCT = 5  # Smaller position changes are not sent
 VALVE_OVERSHOOT_STOP_K = 0.5  # A modulating valve closes this far above the target whatever the model says
 VALVE_PROPORTIONAL_BAND_K = 1.0  # A modulating valve opens 100 % further per this many K below the target
+# Lead of a modulating valve: radiator and air answer a valve move only after a dead
+# time plus a lag, so a valve driven by the room reading alone swings (+1.3 K, 1.5 h)
+VALVE_DEFAULT_LEAD_MINUTES = 15.0  # Dead time + lag until a learned one exists
+VALVE_LEAD_MIN_MINUTES = 5.0
+VALVE_LEAD_MAX_MINUTES = 45.0
+VALVE_LEAD_LEARN_RATE = 0.3  # Share of a new turning-point delay taken into the lead
+VALVE_LEAD_TURN_K = 0.1  # The room turned once it moved this far back from its extreme
+VALVE_TREND_WINDOW_MINUTES = 15.0
+VALVE_TREND_MAX_K_PER_MIN = 0.05
+VALVE_LOOP_GAIN = 0.4  # Kelvin the valve's full power moves the room within one lead, per band K
+VALVE_INTEGRAL_LEADS = 3.0  # Integral time of the holding-power trim in leads
+VALVE_TRIM_LIMIT = 1.0
+VALVE_LEAD_RELEARN_SHARE = 0.5  # A turning point this far off the learned lead counts as a miss
+VALVE_LEAD_RELEARN_TURNS = 3  # Misses in a row (same side) replace the lead instead of nudging it
 # AC sensor offset (device reading - room sensor while the compressor runs), see HeadOffsetTracker
 HEAD_OFFSET_SETTLE_S = 240  # Running time before readings count: the offset builds up with the airflow after a start
 HEAD_OFFSET_ALPHA = 0.05  # EMA weight per reading (one per 30 s cycle: ~10 min of running to follow a change)
