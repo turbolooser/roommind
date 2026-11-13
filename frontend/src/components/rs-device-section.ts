@@ -405,14 +405,14 @@ export class RsDeviceSection extends LitElement {
     let displayValue = "";
     if (type === "climate") {
       const ct = attrs.current_temperature as number | undefined;
-      if (ct != null) displayValue = `${ct.toFixed(1)}${tempUnit(this.hass)}`;
+      if (ct != null) displayValue = `${ct.toFixed(2)}${tempUnit(this.hass)}`;
     } else if (type === "temp") {
       const tempVal = entityId.startsWith("climate.") ? attrs.current_temperature : state;
       if (tempVal != null && tempVal !== "" && tempVal !== "unknown" && tempVal !== "unavailable")
-        displayValue = `${Number(tempVal).toFixed(1)}${tempUnit(this.hass)}`;
+        displayValue = `${Number(tempVal).toFixed(2)}${tempUnit(this.hass)}`;
     } else {
       if (state && state !== "unknown" && state !== "unavailable")
-        displayValue = `${Math.round(Number(state))}%`;
+        displayValue = `${Number(state).toFixed(2)}%`;
     }
 
     const showExcludeBadge =
