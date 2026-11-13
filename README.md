@@ -20,7 +20,7 @@ This fork only adds a layer of tuning on top, specifically for running several A
 
 **→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
-**Upstream base of this release:** fork `1.8.7` is built on upstream **`v1.8.2`** (commit [`0305471`](https://github.com/snazzybean/roommind/commit/0305471662bb5ad509f92638e3f869fe8d8f9c2b)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
+**Upstream base of this release:** fork `1.8.8` is built on upstream **`v1.8.2`** (commit [`0305471`](https://github.com/snazzybean/roommind/commit/0305471662bb5ad509f92638e3f869fe8d8f9c2b)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
 
 ---
 
@@ -95,7 +95,18 @@ Vacation can **turn heating off while cooling continues** — for a summer trip 
 
 Only the *control* pause is conditional. Model learning stays frozen whenever a window is physically open, in every mode: an open window skews the room's heat balance either way, and training on that data would corrupt the thermal model. The open/close delays are untouched — they decide when a window counts as open, this decides what happens once it does. An unrecognised value falls back to `Always`.
 
-### 12. Panel fixes
+### 12. Learned valve lead for direct valve control
+Rooms whose TRV valve RoomMind drives directly (opening/closing degree entities, upstream #413) no longer hold the valve by the room reading alone. A radiator answers a valve move only after a dead time plus a lag, which a first-order room model cannot represent: one radiator room swung 17.5–19.3 °C at an 18 °C target every ~1.5 h, overshooting by up to 1.3 K, because the valve opened while the room still had ~9 min of falling ahead and stayed wide open until the reading reached the target, after which the room kept rising for another 7–15 min.
+
+The fork adds a **learned lead** per room, with nothing to configure:
+
+- **Lead time** — learned from the turning points: how long the room keeps falling after the valve opens and keeps rising after it closes (start 15 min, limits 5–45 min). The valve is driven by the reading expected one lead ahead (current reading plus its 15-min trend), so it closes early while the room rises and opens early while it falls.
+- **Holding trim** — an integral correction of the model's holding power: a room that ends above its target gets less heat next time, one below gets more. It does not integrate into a fully open or shut valve, and not while the room sits far above its target (sun).
+- **Band from the learned heating power** — the proportional band widens with `Q_heat × lead`, so a strong radiator in a small room opens gently, while a radiator that barely keeps up keeps the upstream 1 K band.
+
+Lead, trim and the number of turning points are **saved with the thermal data** (every ~15 min) and survive restarts. They are relearned after a thermal reset, or when three turning points in a row miss the learned lead by more than half on the same side (radiator, sensor or room changed). The live values are in the diagnostics under `valve_lead`. In a closed-loop test fitted to that room, the reading-driven valve overshot by 0.7 K with a 1.2 K span; with the lead it stays within +0.1 K and a 0.2 K span. Setpoint TRVs and AC heating are unchanged.
+
+### 13. Panel fixes
 HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
 
 The panel's `js_url` also carries a `?v=<version>` cache buster. Upstream registers it under an URL that is identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.
