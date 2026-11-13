@@ -43,8 +43,10 @@ from ..const import (
     PROPORTIONAL_DEADBAND_C,
     PROPORTIONAL_DEADBAND_NEAR_TARGET_C,
     PROPORTIONAL_SETPOINT_DWELL_SECONDS,
+    VALVE_LOOP_GAIN,
     VALVE_OVERSHOOT_STOP_K,
     VALVE_PROPORTIONAL_BAND_K,
+    VALVE_TREND_MAX_K_PER_MIN,
     TargetTemps,
     is_override_active,
     make_roommind_context,
@@ -78,6 +80,7 @@ from .thermal_model import RoomModelManager
 if TYPE_CHECKING:
     from ..managers.head_offset_tracker import HeadOffsetTracker
     from ..managers.heat_source_orchestrator import HeatSourcePlan
+    from ..managers.valve_lead_tracker import ValveLead
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1038,19 +1041,51 @@ def valve_demand(
     *,
     q_solar: float,
     q_occupancy: float,
+    lead_minutes: float = 0.0,
+    trim: float = 0.0,
 ) -> float:
     """Valve opening (0-1) for a room with direct valve control (#413), 0.0 without demand.
 
     The share of full heating power that holds *target* against the learned losses, sun
-    and occupancy, plus 100 % per ``VALVE_PROPORTIONAL_BAND_K`` below it. The optimizer's
-    closed form is a 5-min deadbeat with an energy bias: it saturates a step below the
-    target and finds no demand right at it, so a valve would still switch on and off.
+    and occupancy, plus 100 % per ``valve_band`` below it. The optimizer's closed form is
+    a 5-min deadbeat with an energy bias: it saturates a step below the target and finds
+    no demand right at it, so a valve would still switch on and off.
+
+    *current_temp* is the reading expected one lead ahead (``valve_lead_temp``), *trim*
+    the learned correction of the holding share (``ValveLeadTracker``): a first-order
+    model has no state for the heat still in the radiator, so the reading alone kept
+    the valve open until the target and the room overshot by up to 1.3 K.
     """
     if model.Q_heat <= 0:
         return 0.0
-    hold = model.U * (target - outdoor_temp) - model.Q_solar * q_solar - model.Q_occupancy * q_occupancy
-    pf = hold / model.Q_heat + (target - current_temp) / VALVE_PROPORTIONAL_BAND_K
+    hold = valve_holding_share(model, outdoor_temp, target, q_solar=q_solar, q_occupancy=q_occupancy)
+    pf = hold + trim + (target - current_temp) / valve_band(model, lead_minutes)
     return min(1.0, pf) if pf > 0.0 else 0.0
+
+
+def valve_holding_share(model: Any, outdoor_temp: float, target: float, *, q_solar: float, q_occupancy: float) -> float:
+    """The model's share of full heating power that holds *target* (the trim corrects it)."""
+    if model.Q_heat <= 0:
+        return 0.0
+    hold = model.U * (target - outdoor_temp) - model.Q_solar * q_solar - model.Q_occupancy * q_occupancy
+    return float(hold / model.Q_heat)
+
+
+def valve_band(model: Any, lead_minutes: float) -> float:
+    """Kelvin below the target at which a modulating valve is fully open.
+
+    Full power moves the room ``Q_heat * lead`` before a reading shows it, so a strong
+    radiator in a small room needs a wider band than one that barely keeps up: the same
+    1 K band gave a loop gain far above what a lead of 15 min allows. Without a lead the
+    fixed ``VALVE_PROPORTIONAL_BAND_K``.
+    """
+    return max(VALVE_PROPORTIONAL_BAND_K, float(model.Q_heat) / 60.0 * lead_minutes / VALVE_LOOP_GAIN)
+
+
+def valve_lead_temp(current_temp: float, trend: float, lead_minutes: float) -> float:
+    """Room reading expected one lead ahead from its trend (K/min, clamped)."""
+    rate = max(-VALVE_TREND_MAX_K_PER_MIN, min(VALVE_TREND_MAX_K_PER_MIN, trend))
+    return current_temp + rate * lead_minutes
 
 
 def is_slow_heat(min_run_blocks: int) -> bool:
@@ -1121,6 +1156,7 @@ def decide_mpc_action(
     continuation_power: Callable[[str, float], float],
     area_id: str | None = None,
     valve_demand: Callable[[float], float] | None = None,
+    valve_lead_temp: float | None = None,
 ) -> tuple[str, float]:
     """Apply the controller's rules to the optimizer's first block.
 
@@ -1130,7 +1166,8 @@ def decide_mpc_action(
     ``continuation_power(mode, target)`` gives the power of a min-run continuation.
     ``area_id`` enables the hard-ceiling log lines (the prediction passes None).
     ``valve_demand(target)`` (holding power plus proportional term, 0.0 without demand,
-    see ``valve_demand``) marks a room with direct valve control, see ``_valve_action``.
+    see ``valve_demand``) marks a room with direct valve control, see ``_valve_action``;
+    ``valve_lead_temp`` is its reading one lead ahead (None: the current one).
 
     Order: hard ceiling, model guard, then the switching hysteresis.
     """
@@ -1194,13 +1231,28 @@ def decide_mpc_action(
     heat_rising = max(near_heat) > heat_now
     cool_falling = min(near_cool) < cool_now
 
+    lead_temp = current_temp if valve_lead_temp is None else valve_lead_temp
     if valve_demand is not None and not slow_heat and can_heat and previous_mode == MODE_HEATING:
         if action != MODE_COOLING and current_temp < max(near_heat) + HARD_OVERSHOOT_CEILING:
-            return _valve_action(action, power_fraction, current_temp, heat_now, heat_rising, valve_demand)
+            return _valve_action(action, power_fraction, current_temp, lead_temp, heat_now, heat_rising, valve_demand)
+    if (
+        valve_demand is not None
+        and valve_lead_temp is not None
+        and not slow_heat
+        and can_heat
+        and action != MODE_COOLING
+        and not heat_rising
+        and current_temp < heat_now + VALVE_OVERSHOOT_STOP_K
+        and lead_temp <= heat_now - heat_hysteresis + _TEMP_EPSILON
+    ):
+        # A falling room starts the valve one lead early, even before the optimizer, which
+        # sees only the reading, would: started at the reading, the room kept falling
+        # 0.4 K through the dead time and the full valve then overshot (Veranda, 13.11.)
+        return MODE_HEATING, max(valve_demand(heat_now), MIN_POWER_FRACTION)
 
     if action == MODE_HEATING:
         if not slow_heat and previous_mode != MODE_HEATING and not heat_rising:
-            if current_temp > heat_now - heat_hysteresis - _TEMP_EPSILON:
+            if (lead_temp if valve_demand is not None else current_temp) > heat_now - heat_hysteresis - _TEMP_EPSILON:
                 return MODE_IDLE, 0.0
     elif action == MODE_COOLING:
         if previous_mode != MODE_COOLING and not cool_falling:
@@ -1231,6 +1283,7 @@ def _valve_action(
     action: str,
     power_fraction: float,
     current_temp: float,
+    lead_temp: float,
     heat_now: float,
     heat_rising: bool,
     valve_demand: Callable[[float], float],
@@ -1241,7 +1294,8 @@ def _valve_action(
     below the start hysteresis. A valve can hold the room instead: below the target at
     least ``MIN_POWER_FRACTION`` (no stop right after a start), above it the demand, which
     falls to zero ``VALVE_PROPORTIONAL_BAND_K`` x holding share past the target. A rising target in the
-    guard window keeps the optimizer's own power (pre-heat).
+    guard window keeps the optimizer's own power (pre-heat). The minimum below the target
+    follows the reading one lead ahead (``lead_temp``), the stop the reading itself.
     """
     if current_temp >= heat_now + VALVE_OVERSHOOT_STOP_K and not heat_rising:
         # A model that overrates the holding power would keep the valve open up to the hard ceiling
@@ -1249,7 +1303,7 @@ def _valve_action(
     demand = valve_demand(heat_now)
     if action == MODE_HEATING and heat_rising:
         return MODE_HEATING, max(power_fraction, demand)
-    if current_temp < heat_now:
+    if lead_temp < heat_now:
         return MODE_HEATING, max(demand, MIN_POWER_FRACTION)
     if demand > 0.0:
         return MODE_HEATING, demand
@@ -1399,6 +1453,7 @@ class MPCController:
         q_rebound: float | None = None,
         previous_heat_sources: str = "none",
         head_offsets: HeadOffsetTracker | None = None,
+        valve_lead: ValveLead | None = None,
     ) -> None:
         self.hass = hass
         self.room_config = room_config
@@ -1437,6 +1492,10 @@ class MPCController:
         self.q_rebound = q_rebound
         # Learned AC sensor offsets (device reading - room sensor); None leaves setpoints in the room frame
         self._head_offsets = head_offsets
+        # Lead and trim of a room with direct valve control; None drives the valve by the reading
+        self._valve_lead = valve_lead
+        # (band, unclamped demand) of the last valve decision, for ValveLeadTracker.update
+        self.valve_feedback: tuple[float, float] | None = None
         self._idle_targets: TargetTemps | None = None
         self._force_off = False
         # Strictest heat / cool target within the MPC guard window (set by _evaluate_mpc)
@@ -1783,6 +1842,8 @@ class MPCController:
             self._lead_heat = max(lead_heat) if lead_heat else None
             self._lead_cool = min(lead_cool) if lead_cool else None
             outdoor_now = outdoor_series[0]
+            lead = self._valve_lead if self._valve_modulating else None
+            lead_temp = current_temp if lead is None else valve_lead_temp(current_temp, lead.trend, lead.minutes)
             action = decide_mpc_action(
                 plan.get_current_action(),
                 plan.get_current_power_fraction(),
@@ -1807,8 +1868,9 @@ class MPCController:
                 continuation_power=partial(self._gentle_power, optimizer, current_temp, outdoor_now),
                 area_id=self._area_id,
                 valve_demand=(
-                    partial(self._valve_demand, model, current_temp, outdoor_now) if self._valve_modulating else None
+                    partial(self._valve_demand, model, lead_temp, outdoor_now) if self._valve_modulating else None
                 ),
+                valve_lead_temp=None if lead is None else lead_temp,
             )
             if (
                 _pass
@@ -1822,6 +1884,13 @@ class MPCController:
             if lead_system == run_system:
                 break
             run_system = lead_system
+        if lead is not None:
+            heat_now = heat_target_series[0]
+            band = valve_band(model, lead.minutes)
+            hold = valve_holding_share(
+                model, outdoor_now, heat_now, q_solar=self.q_solar * self._shading_factor, q_occupancy=self.q_occupancy
+            )
+            self.valve_feedback = (band, hold + lead.trim + (heat_now - lead_temp) / band)
         if action[0] == MODE_IDLE and self._setback_hold_over() and len(plan.actions) >= SETBACK_RELEASE_BLOCKS:
             ahead = plan.actions[:SETBACK_RELEASE_BLOCKS]
             self._setback_release = frozenset(
@@ -1853,6 +1922,8 @@ class MPCController:
             target,
             q_solar=self.q_solar * self._shading_factor,
             q_occupancy=self.q_occupancy,
+            lead_minutes=0.0 if self._valve_lead is None else self._valve_lead.minutes,
+            trim=0.0 if self._valve_lead is None else self._valve_lead.trim,
         )
 
     def _evaluate_bangbang(
