@@ -487,7 +487,7 @@ export class RsAreaCard extends LitElement {
         ${
           live.current_temp !== null
             ? html`
-                <span class="current-temp">${formatTemp(live.current_temp, this.hass)}</span>
+                <span class="current-temp">${formatTemp(live.current_temp, this.hass, 2)}</span>
                 <span class="temp-unit">${tempUnit(this.hass)}</span>
               `
             : html`<span class="no-temp">--</span>`
@@ -499,7 +499,7 @@ export class RsAreaCard extends LitElement {
           ${
             live.current_humidity !== null
               ? localize("card.humidity", this.hass.language, {
-                  value: live.current_humidity.toFixed(0),
+                  value: live.current_humidity.toFixed(2),
                 })
               : nothing
           }
@@ -621,7 +621,7 @@ export class RsAreaCard extends LitElement {
         ${
           live.current_temp !== null
             ? html`
-                <span class="current-temp">${formatTemp(live.current_temp, this.hass)}</span>
+                <span class="current-temp">${formatTemp(live.current_temp, this.hass, 2)}</span>
                 <span class="temp-unit">${tempUnit(this.hass)}</span>
               `
             : html`<span class="no-temp">--</span>`
@@ -632,7 +632,7 @@ export class RsAreaCard extends LitElement {
           ${
             live.current_humidity !== null
               ? localize("card.humidity", this.hass.language, {
-                  value: live.current_humidity.toFixed(0),
+                  value: live.current_humidity.toFixed(2),
                 })
               : nothing
           }
