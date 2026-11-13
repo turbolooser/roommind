@@ -7,7 +7,7 @@ import { customElement, property } from "lit/decorators.js";
 import type { HomeAssistant, HassEntity } from "../../types";
 import { localize } from "../../utils/localize";
 import { tempUnit } from "../../utils/temperature";
-import { formatNumber, formatPercent } from "../../utils/format";
+import { formatNumber, formatPercent, MEASURED_DECIMALS } from "../../utils/format";
 
 @customElement("rs-settings-sensors")
 export class RsSettingsSensors extends RsSettingsBase {
@@ -61,7 +61,7 @@ export class RsSettingsSensors extends RsSettingsBase {
               outdoorTemp !== null
                 ? html`<div class="current-value">
                     ${localize("settings.outdoor_current", l, {
-                      temp: `${formatNumber(outdoorTemp, this.hass, 1)}\u00a0${tempUnit(this.hass)}`,
+                      temp: `${formatNumber(outdoorTemp, this.hass, MEASURED_DECIMALS)}\u00a0${tempUnit(this.hass)}`,
                     })}
                   </div>`
                 : this.outdoorTempSensor
