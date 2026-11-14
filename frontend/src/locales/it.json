@@ -189,6 +189,8 @@
   "devices.valve_closing_mode": "Il secondo valore è",
   "devices.valve_closing_mode_closing_degree": "Grado di chiusura",
   "devices.valve_closing_mode_idle_opening": "Apertura a riposo",
+  "devices.valve_min_opening": "Apertura minima in riscaldamento",
+  "devices.valve_min_opening_info": "Apertura minima della valvola che RoomMind mantiene in riscaldamento (predefinita 15 %). Se il radiatore fornisce quasi tutto il calore già con poca apertura, la stanza oscilla attorno all'obiettivo: riducila dopo aver misurato da quale percentuale la valvola lascia passare l'acqua. Non sotto il 5 % (i passi più piccoli non vengono inviati). Con più valvole nella stanza vale il valore più alto.",
   "devices.valve_direct_badge": "Valvola diretta",
   "devices.info.intro": "Cosa fa ogni impostazione è spiegato nell'icona info accanto. Come RoomMind comanda termostati e climatizzatori è nella documentazione.",
   "hero.window_open": "Finestra aperta, in pausa",

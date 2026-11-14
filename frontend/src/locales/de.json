@@ -189,6 +189,8 @@
   "devices.valve_closing_mode": "Zweiter Wert ist",
   "devices.valve_closing_mode_closing_degree": "Schließgrad",
   "devices.valve_closing_mode_idle_opening": "Öffnung im Leerlauf",
+  "devices.valve_min_opening": "Mindestöffnung beim Heizen",
+  "devices.valve_min_opening_info": "Kleinste Ventilöffnung, die RoomMind beim Heizen hält (Standard 15 %). Liefert der Heizkörper schon bei wenig Öffnung fast volle Wärme, pendelt der Raum um das Ziel: dann kleiner stellen, nachdem gemessen ist, ab wie viel Prozent das Ventil Wasser durchlässt. Unter 5 % geht nicht (kleinere Schritte werden nicht gesendet). Bei mehreren Ventilen im Raum gilt der höchste Wert.",
   "devices.valve_direct_badge": "Direktes Ventil",
   "devices.info.intro": "Was eine Einstellung tut, steht am Info-Symbol daneben. Wie RoomMind Thermostate und Klimageräte ansteuert, steht in der Doku.",
   "hero.window_open": "Fenster offen, pausiert",
