@@ -18,7 +18,7 @@ from ..const import (
     MODE_IDLE,
     is_override_active,
 )
-from ..utils.device_utils import get_ac_eids, get_trv_eids
+from ..utils.device_utils import get_ac_eids, get_trv_eids, valve_min_fraction
 from .mpc_controller import (
     HARD_OVERSHOOT_CEILING,
     PLAN_DT_MINUTES,
@@ -343,6 +343,7 @@ def _simulate_mpc(
     slow_heat = is_slow_heat(min_run)
     start_penalty = slow_start_penalty(min_run, PLAN_DT_MINUTES)
     heat_hysteresis = heat_start_hysteresis(acs_can_heat, bool(get_trv_eids(room_config.get("devices", []))))
+    valve_min = valve_min_fraction(room_config.get("devices", []))
     block_seconds = PLAN_DT_MINUTES * 60
 
     T = current_temp
@@ -459,6 +460,7 @@ def _simulate_mpc(
                     if valve_modulating
                     else None
                 ),
+                valve_min=valve_min,
             )
         if action == MODE_HEATING:
             Q = pf * model.Q_heat
