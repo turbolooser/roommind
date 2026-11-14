@@ -40,7 +40,7 @@ def test_is_valve_modulating():
     assert not is_valve_modulating([AC], False, True)
 
 
-def _decide(action, pf, temp, *, previous=MODE_HEATING, demand=0.3, heat=None, slow=False, in_min_run=False):
+def _decide(action, pf, temp, *, previous=MODE_HEATING, demand=0.3, heat=None, slow=False, in_min_run=False, **extra):
     heat = heat or [21.0] * 12
     return decide_mpc_action(
         action,
@@ -59,6 +59,7 @@ def _decide(action, pf, temp, *, previous=MODE_HEATING, demand=0.3, heat=None, s
         idle_drift=lambda minutes: temp,
         continuation_power=lambda mode, target: MIN_POWER_FRACTION,
         valve_demand=None if demand is None else (lambda target: demand),
+        **extra,
     )
 
 
@@ -74,6 +75,18 @@ def test_running_valve_stops_once_the_room_needs_no_heat():
 def test_below_target_the_valve_keeps_at_least_the_minimum():
     assert _decide(MODE_IDLE, 0.0, 20.95, demand=0.0) == (MODE_HEATING, MIN_POWER_FRACTION)
     assert _decide(MODE_HEATING, 1.0, 20.5, demand=0.6) == (MODE_HEATING, 0.6)
+
+
+def test_a_lower_valve_floor_holds_a_room_that_needs_little():
+    """Veranda 14.11.: holding needs ~5 %, the 15 % floor pulsed it 0.5-1.3 K over the target."""
+    floor = 0.05
+    # Running below the target, a falling room's early start and a start past the hysteresis
+    assert _decide(MODE_IDLE, 0.0, 20.95, demand=0.0, valve_min=floor) == (MODE_HEATING, floor)
+    assert _decide(MODE_HEATING, 1.0, 20.7, previous=MODE_IDLE, demand=0.0, valve_min=floor) == (MODE_HEATING, floor)
+    # Above the floor the demand rules as before
+    assert _decide(MODE_IDLE, 0.0, 20.95, demand=0.3, valve_min=floor) == (MODE_HEATING, 0.3)
+    # Without a floor of its own the room keeps the global minimum
+    assert _decide(MODE_IDLE, 0.0, 20.95, demand=0.0) == (MODE_HEATING, MIN_POWER_FRACTION)
 
 
 def test_rising_target_keeps_the_optimizers_preheat_power():
@@ -155,6 +168,22 @@ async def test_controller_passes_the_valve_demand(monkeypatch):
         assert (seen["valve_demand"] is not None) is expected
         if expected:
             assert 0.0 <= seen["valve_demand"](21.0) <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_controller_passes_the_rooms_valve_floor(monkeypatch):
+    from custom_components.roommind.const import TargetTemps
+
+    seen = {}
+
+    def fake_decide(*args, **kwargs):
+        seen.update(kwargs)
+        return MODE_IDLE, 0.0
+
+    monkeypatch.setattr("custom_components.roommind.control.mpc_controller.decide_mpc_action", fake_decide)
+    for devices, expected in (([TRV], MIN_POWER_FRACTION), ([{**TRV, "valve_min_opening": 5}], 0.05)):
+        _controller(devices)._evaluate_mpc(20.5, TargetTemps(heat=21.0, cool=24.0))
+        assert seen["valve_min"] == pytest.approx(expected)
 
 
 @pytest.mark.asyncio

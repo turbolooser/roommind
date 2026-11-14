@@ -850,7 +850,18 @@ export class RsDeviceSection extends LitElement {
                   idleOpening ? "idle_opening" : "closing_degree",
                   (v) => this._onValveClosingModeChange(id, v),
                 )}
-              </rs-field>`
+              </rs-field>
+              <rs-number-field
+                .label=${localize("devices.valve_min_opening", l)}
+                .info=${localize("devices.valve_min_opening_info", l)}
+                suffix="%"
+                .value=${device.valve_min_opening ?? 15}
+                .min=${5}
+                .max=${100}
+                .step=${1}
+                @value-changed=${(e: CustomEvent<{ value: number }>) =>
+                  this._onValveMinOpeningChange(id, e.detail.value)}
+              ></rs-number-field>`
           : nothing
       }
       ${
@@ -1096,6 +1107,7 @@ export class RsDeviceSection extends LitElement {
         delete updated.valve_opening_entity;
         delete updated.valve_closing_entity;
         delete updated.valve_closing_mode;
+        delete updated.valve_min_opening;
       }
       return updated;
     });
@@ -1232,6 +1244,7 @@ export class RsDeviceSection extends LitElement {
         delete updated.valve_opening_entity;
         delete updated.valve_closing_entity;
         delete updated.valve_closing_mode;
+        delete updated.valve_min_opening;
         if (pair) [updated.valve_opening_entity, updated.valve_closing_entity] = pair;
         return updated;
       }),
@@ -1250,6 +1263,7 @@ export class RsDeviceSection extends LitElement {
           delete updated.valve_opening_entity;
           delete updated.valve_closing_entity;
           delete updated.valve_closing_mode;
+          delete updated.valve_min_opening;
           return updated;
         }
         updated.valve_opening_entity = value;
@@ -1266,6 +1280,20 @@ export class RsDeviceSection extends LitElement {
         const updated = { ...d };
         if (value) updated.valve_closing_entity = value;
         else delete updated.valve_closing_entity;
+        return updated;
+      }),
+    );
+  }
+
+  private _onValveMinOpeningChange(entityId: string, value: number): void {
+    const pct = Math.max(5, Math.min(100, Math.round(value)));
+    this._fireDeviceChanged(
+      this.devices.map((d) => {
+        if (d.entity_id !== entityId) return d;
+        const updated = { ...d };
+        // The default stays unstored, like the closing mode
+        if (pct === 15) delete updated.valve_min_opening;
+        else updated.valve_min_opening = pct;
         return updated;
       }),
     );
