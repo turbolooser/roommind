@@ -58,7 +58,6 @@ from .const import (
     MAX_PREDICTION_DELTA,
     MAX_SENSOR_STALENESS,
     MAX_TARGET_TEMP,
-    MIN_POWER_FRACTION,
     MIN_TARGET_TEMP,
     MODE_COOLING,
     MODE_HEATING,
@@ -141,6 +140,7 @@ from .utils.device_utils import (
     get_trv_eids,
     get_valve_entities,
     room_contributes_to_group,
+    valve_min_fraction,
 )
 from .utils.history_store import HistoryStore
 from .utils.presence_utils import is_room_vacant
@@ -1982,7 +1982,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                         if any(is_hold_throttled(eid) for eid in compressor_held) or all(
                             held_opening(eid) is not None for eid in compressor_held
                         ):
-                            held_pf = MIN_POWER_FRACTION
+                            held_pf = valve_min_fraction(room.get("devices", []))
                         else:
                             held_pf = self._last_run_pf.get(area_id, held_pf)
                     display_mode, display_pf = held_mode, held_pf

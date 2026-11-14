@@ -55,6 +55,8 @@ from .utils.device_utils import (
     SETPOINT_OFFSET_MAX,
     SETPOINT_OFFSET_MIN,
     VALVE_CLOSING_MODES,
+    VALVE_MIN_OPENING_MAX_PCT,
+    VALVE_MIN_OPENING_MIN_PCT,
     ValveEntities,
     get_valve_entities,
 )
@@ -111,7 +113,7 @@ def _number_entity_or_empty(value: object) -> str:
 def _validate_device_valve(device: dict) -> dict:
     """Direct valve control (#413) is for TRVs; it takes effect once both degree entities are set."""
     opening, closing = device.get("valve_opening_entity"), device.get("valve_closing_entity")
-    if (opening or closing) and device.get("type") != "trv":
+    if (opening or closing or device.get("valve_min_opening") is not None) and device.get("type") != "trv":
         raise vol.Invalid("direct valve control is only supported for TRVs (type='trv')")
     if device.get("valve_closing_entity") and device.get("valve_closing_entity") == device.get("valve_opening_entity"):
         raise vol.Invalid("valve_opening_entity and valve_closing_entity must differ")
@@ -476,6 +478,10 @@ async def websocket_list_rooms(
                     vol.Optional("valve_closing_entity"): _number_entity_or_empty,
                     # No default: devices without it keep their stored form (#482)
                     vol.Optional("valve_closing_mode"): vol.In(VALVE_CLOSING_MODES),
+                    # No default either: a missing floor is the global one (15 %)
+                    vol.Optional("valve_min_opening"): vol.All(
+                        vol.Coerce(int), vol.Range(min=VALVE_MIN_OPENING_MIN_PCT, max=VALVE_MIN_OPENING_MAX_PCT)
+                    ),
                 },
                 _validate_device_idle_action,
                 _validate_device_coil_dry,
