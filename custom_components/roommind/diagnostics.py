@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from .const import DEFAULT_CONTROL_MODE, DOMAIN, HEATING_SYSTEM_RADIATOR, VERSION
 from .control.mpc_controller import _active_targets, _last_commands, _now, _sent_at
 from .control.residual_heat import residual_tau
+from .utils.device_utils import get_valve_min_opening
 from .utils.history_store import DETAIL_FIELDS
 
 # v2 adds what a simulation needs to rebuild a setup (device capabilities, referenced
@@ -74,6 +75,7 @@ def _build_device_states(hass: HomeAssistant, devices: list[dict]) -> list[dict[
             "valve_opening_entity": dev.get("valve_opening_entity", ""),
             "valve_closing_entity": dev.get("valve_closing_entity", ""),
             "valve_closing_mode": dev.get("valve_closing_mode", "closing_degree"),
+            "valve_min_opening": get_valve_min_opening(dev),
         }
         if state:
             attrs = state.attributes

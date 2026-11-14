@@ -73,6 +73,7 @@ from ..utils.device_utils import (
     get_trv_eids,
     get_valve_entities,
     has_reliable_hvac_modes,
+    valve_min_fraction,
 )
 from ..utils.temp_utils import celsius_delta_to_ha, celsius_to_ha_temp
 from .direct_valve import async_release_valve, async_set_valve, clear_valve_cache
@@ -1238,6 +1239,7 @@ def decide_mpc_action(
     area_id: str | None = None,
     valve_demand: Callable[[float], float] | None = None,
     valve_lead_temp: float | None = None,
+    valve_min: float = MIN_POWER_FRACTION,
 ) -> tuple[str, float]:
     """Apply the controller's rules to the optimizer's first block.
 
@@ -1248,7 +1250,8 @@ def decide_mpc_action(
     ``area_id`` enables the hard-ceiling log lines (the prediction passes None).
     ``valve_demand(target)`` (holding power plus proportional term, 0.0 without demand,
     see ``valve_demand``) marks a room with direct valve control, see ``_valve_action``;
-    ``valve_lead_temp`` is its reading one lead ahead (None: the current one).
+    ``valve_lead_temp`` is its reading one lead ahead (None: the current one);
+    ``valve_min`` the smallest opening it heats at (``valve_min_fraction``).
 
     Order: hard ceiling, model guard, then the switching hysteresis.
     """
@@ -1315,7 +1318,9 @@ def decide_mpc_action(
     lead_temp = current_temp if valve_lead_temp is None else valve_lead_temp
     if valve_demand is not None and not slow_heat and can_heat and previous_mode == MODE_HEATING:
         if action != MODE_COOLING and current_temp < max(near_heat) + HARD_OVERSHOOT_CEILING:
-            return _valve_action(action, power_fraction, current_temp, lead_temp, heat_now, heat_rising, valve_demand)
+            return _valve_action(
+                action, power_fraction, current_temp, lead_temp, heat_now, heat_rising, valve_demand, valve_min
+            )
     if (
         valve_demand is not None
         and valve_lead_temp is not None
@@ -1329,7 +1334,7 @@ def decide_mpc_action(
         # A falling room starts the valve one lead early, even before the optimizer, which
         # sees only the reading, would: started at the reading, the room kept falling
         # 0.4 K through the dead time and the full valve then overshot (Veranda, 13.11.)
-        return MODE_HEATING, max(valve_demand(heat_now), MIN_POWER_FRACTION)
+        return MODE_HEATING, max(valve_demand(heat_now), valve_min)
 
     if action == MODE_HEATING:
         if not slow_heat and previous_mode != MODE_HEATING and not heat_rising:
@@ -1356,7 +1361,7 @@ def decide_mpc_action(
         return MODE_COOLING, continuation_power(MODE_COOLING, cool_now)
     if valve_demand is not None and action == MODE_HEATING and not slow_heat and not heat_rising:
         # A valve start runs at what the room needs, not at the optimizer's full-power fallback
-        return action, max(valve_demand(heat_now), MIN_POWER_FRACTION)
+        return action, max(valve_demand(heat_now), valve_min)
     return action, power_fraction
 
 
@@ -1368,12 +1373,13 @@ def _valve_action(
     heat_now: float,
     heat_rising: bool,
     valve_demand: Callable[[float], float],
+    valve_min: float = MIN_POWER_FRACTION,
 ) -> tuple[str, float]:
     """A running room with direct valve control holds the valve at the power it needs (#413).
 
     Setpoint TRVs open fully or not at all, so their runs stop at the target and restart
     below the start hysteresis. A valve can hold the room instead: below the target at
-    least ``MIN_POWER_FRACTION`` (no stop right after a start), above it the demand, which
+    least ``valve_min`` (no stop right after a start; default ``MIN_POWER_FRACTION``), above it the demand, which
     falls to zero ``VALVE_PROPORTIONAL_BAND_K`` x holding share past the target. A rising target in the
     guard window keeps the optimizer's own power (pre-heat). The minimum below the target
     follows the reading one lead ahead (``lead_temp``), the stop the reading itself.
@@ -1385,7 +1391,7 @@ def _valve_action(
     if action == MODE_HEATING and heat_rising:
         return MODE_HEATING, max(power_fraction, demand)
     if lead_temp < heat_now:
-        return MODE_HEATING, max(demand, MIN_POWER_FRACTION)
+        return MODE_HEATING, max(demand, valve_min)
     if demand > 0.0:
         return MODE_HEATING, demand
     return MODE_IDLE, 0.0
@@ -1555,6 +1561,7 @@ class MPCController:
         self._direct_eids: set[str] = get_direct_setpoint_eids(self._devices)
         self._direct_offsets: dict[str, float] = get_setpoint_offsets(self._devices)
         self._valve_entities: dict[str, ValveEntities] = get_valve_entities(self._devices)
+        self._valve_min: float = valve_min_fraction(self._devices)
         self.climate_mode: str = room_config.get("climate_mode", "auto")
         self.outdoor_temp = outdoor_temp
         # Price level the orchestration follows (heat_source_price_aware), same as the coordinator's
@@ -2017,6 +2024,7 @@ class MPCController:
                     partial(self._valve_demand, model, lead_temp, outdoor_now) if self._valve_modulating else None
                 ),
                 valve_lead_temp=None if lead is None else lead_temp,
+                valve_min=self._valve_min,
             )
             if (
                 _pass
@@ -2921,7 +2929,7 @@ class MPCController:
             eid,
             valve.opening,
             valve.closing,
-            MIN_POWER_FRACTION * 100,
+            self._valve_min * 100,
             area_id=self._area_id,
             target=targets.heat,
             urgent=True,
