@@ -1204,6 +1204,24 @@ export class RsDeviceSection extends LitElement {
                   .text=${localize("devices.valve_closing_mode_hint", lang)}
                 ></rs-info-icon>
               </div>
+              <div class="detail-field with-info">
+                <ha-textfield
+                  .label=${localize("devices.valve_min_opening", lang)}
+                  suffix="%"
+                  .value=${String(device.valve_min_opening ?? 15)}
+                  type="number"
+                  step="1"
+                  min="5"
+                  max="100"
+                  @change=${(e: Event) => {
+                    const v = parseFloat((e.target as HTMLInputElement).value);
+                    if (!isNaN(v)) this._onValveMinOpeningChange(entityId, v);
+                  }}
+                ></ha-textfield>
+                <rs-info-icon
+                  .text=${localize("devices.valve_min_opening_hint", lang)}
+                ></rs-info-icon>
+              </div>
             `
           : nothing
       }
@@ -1261,6 +1279,7 @@ export class RsDeviceSection extends LitElement {
         delete updated.valve_opening_entity;
         delete updated.valve_closing_entity;
         delete updated.valve_closing_mode;
+        delete updated.valve_min_opening;
       }
       return updated;
     });
@@ -1400,6 +1419,7 @@ export class RsDeviceSection extends LitElement {
         delete updated.valve_opening_entity;
         delete updated.valve_closing_entity;
         delete updated.valve_closing_mode;
+        delete updated.valve_min_opening;
         if (pair) [updated.valve_opening_entity, updated.valve_closing_entity] = pair;
         return updated;
       }),
@@ -1418,6 +1438,7 @@ export class RsDeviceSection extends LitElement {
           delete updated.valve_opening_entity;
           delete updated.valve_closing_entity;
           delete updated.valve_closing_mode;
+          delete updated.valve_min_opening;
           return updated;
         }
         updated.valve_opening_entity = value;
@@ -1434,6 +1455,20 @@ export class RsDeviceSection extends LitElement {
         const updated = { ...d };
         if (value) updated.valve_closing_entity = value;
         else delete updated.valve_closing_entity;
+        return updated;
+      }),
+    );
+  }
+
+  private _onValveMinOpeningChange(entityId: string, value: number): void {
+    const pct = Math.max(5, Math.min(100, Math.round(value)));
+    this._fireDeviceChanged(
+      this.devices.map((d) => {
+        if (d.entity_id !== entityId) return d;
+        const updated = { ...d };
+        // The default stays unstored, like the closing mode
+        if (pct === 15) delete updated.valve_min_opening;
+        else updated.valve_min_opening = pct;
         return updated;
       }),
     );

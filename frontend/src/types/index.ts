@@ -95,6 +95,7 @@ export interface DeviceConfig {
   valve_opening_entity?: string; // number entity for direct valve opening degree (0-100%)
   valve_closing_entity?: string; // number entity for direct valve closing degree (0-100%)
   valve_closing_mode?: "closing_degree" | "idle_opening"; // idle_opening: the second entity is the opening while idle (SONOFF TRV-ZBT)
+  valve_min_opening?: number; // % the valve is held at least while heating (5-100), unset = 15
 }
 
 export type ConflictResolution =

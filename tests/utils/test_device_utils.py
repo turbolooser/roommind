@@ -865,3 +865,53 @@ def test_get_setback_auto_off_is_opt_in():
     assert get_setback_auto_off(devices, "climate.a") is False
     assert get_setback_auto_off(devices, "climate.b") is True
     assert get_setback_auto_off(devices, "climate.missing") is False
+
+
+def test_valve_min_opening_default_is_the_global_minimum():
+    from custom_components.roommind.const import MIN_POWER_FRACTION, VALVE_DEADBAND_PCT
+    from custom_components.roommind.utils.device_utils import (
+        VALVE_MIN_OPENING_DEFAULT_PCT,
+        VALVE_MIN_OPENING_MIN_PCT,
+    )
+
+    # device_utils may not import const: the copies have to agree
+    assert VALVE_MIN_OPENING_DEFAULT_PCT == round(MIN_POWER_FRACTION * 100)
+    assert VALVE_MIN_OPENING_MIN_PCT == VALVE_DEADBAND_PCT
+
+
+def test_valve_min_opening_per_device():
+    from custom_components.roommind.utils.device_utils import get_valve_min_opening
+
+    assert get_valve_min_opening({}) == 15
+    assert get_valve_min_opening({"valve_min_opening": 5}) == 5
+    assert get_valve_min_opening({"valve_min_opening": "8"}) == 8
+    assert get_valve_min_opening({"valve_min_opening": 2}) == 5  # below the deadband
+    assert get_valve_min_opening({"valve_min_opening": 150}) == 100
+    assert get_valve_min_opening({"valve_min_opening": "x"}) == 15
+    assert get_valve_min_opening({"valve_min_opening": True}) == 15
+    assert get_valve_min_opening({"valve_min_opening": None}) == 15
+
+
+def test_valve_min_fraction_takes_the_highest_floor_of_the_rooms_valves():
+    from custom_components.roommind.utils.device_utils import valve_min_fraction
+
+    valve = {
+        "entity_id": "climate.a",
+        "type": "trv",
+        "valve_opening_entity": "number.a_o",
+        "valve_closing_entity": "number.a_c",
+    }
+    other = {
+        **valve,
+        "entity_id": "climate.b",
+        "valve_opening_entity": "number.b_o",
+        "valve_closing_entity": "number.b_c",
+    }
+    plain = {"entity_id": "climate.c", "type": "trv", "valve_min_opening": 40}  # no valve: ignored
+
+    assert valve_min_fraction([]) == 0.15
+    assert valve_min_fraction([valve]) == 0.15
+    assert valve_min_fraction([{**valve, "valve_min_opening": 5}]) == 0.05
+    assert valve_min_fraction([{**valve, "valve_min_opening": 5}, {**other, "valve_min_opening": 8}]) == 0.08
+    assert valve_min_fraction([{**valve, "valve_min_opening": 5}, other]) == 0.15
+    assert valve_min_fraction([{**valve, "valve_min_opening": 5}, plain]) == 0.05
