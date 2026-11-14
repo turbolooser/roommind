@@ -50,6 +50,14 @@ VALVE_CLOSING_DEGREE = "closing_degree"
 VALVE_IDLE_OPENING = "idle_opening"
 VALVE_CLOSING_MODES = (VALVE_CLOSING_DEGREE, VALVE_IDLE_OPENING)
 
+# Smallest opening a heating valve with direct valve control is held at (``valve_min_opening``,
+# percent). Missing = the global ``MIN_POWER_FRACTION`` (15 %, the TRV dead zone guess). A
+# radiator that 15 % already heats almost fully needs less to hold its room without pulsing.
+# Below ``VALVE_DEADBAND_PCT`` (5) a move from closed would never be sent.
+VALVE_MIN_OPENING_DEFAULT_PCT = 15
+VALVE_MIN_OPENING_MIN_PCT = 5
+VALVE_MIN_OPENING_MAX_PCT = 100
+
 SETPOINT_MODE_PROPORTIONAL = "proportional"
 SETPOINT_MODE_DIRECT = "direct"
 
@@ -388,6 +396,30 @@ def get_valve_entities(devices: list[dict]) -> dict[str, ValveEntities]:
         if eid and opening and closing and d.get("type") == DEVICE_TYPE_TRV:
             result[eid] = ValveEntities(opening, closing, d.get("valve_closing_mode") == VALVE_IDLE_OPENING)
     return result
+
+
+def get_valve_min_opening(device: dict) -> int:
+    """The device's minimum valve opening in percent, the default when unset or invalid."""
+    raw = device.get("valve_min_opening")
+    if raw is None or isinstance(raw, bool):
+        return VALVE_MIN_OPENING_DEFAULT_PCT
+    try:
+        pct = int(round(float(raw)))
+    except (TypeError, ValueError, OverflowError):
+        return VALVE_MIN_OPENING_DEFAULT_PCT
+    return max(VALVE_MIN_OPENING_MIN_PCT, min(VALVE_MIN_OPENING_MAX_PCT, pct))
+
+
+def valve_min_fraction(devices: list[dict]) -> float:
+    """Smallest opening (0-1) a heating room with direct valve control is held at.
+
+    One power fraction drives every valve of the room, so the highest floor of its valves
+    wins: a valve that needs 15 % to pass water would otherwise stay shut. Without valves
+    the default, which is ``MIN_POWER_FRACTION``.
+    """
+    eids = get_valve_entities(devices)
+    floors = [get_valve_min_opening(d) for d in devices if d.get("entity_id") in eids]
+    return (max(floors) if floors else VALVE_MIN_OPENING_DEFAULT_PCT) / 100.0
 
 
 def configured_valves(rooms: dict) -> dict[str, ValveEntities]:

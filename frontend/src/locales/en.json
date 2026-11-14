@@ -193,6 +193,8 @@
   "devices.valve_closing_mode": "Second value is",
   "devices.valve_closing_mode_closing_degree": "Closing degree",
   "devices.valve_closing_mode_idle_opening": "Idle opening",
+  "devices.valve_min_opening": "Minimum opening while heating",
+  "devices.valve_min_opening_info": "Smallest valve opening RoomMind holds while heating (default 15 %). If the radiator delivers nearly full heat at a small opening, the room swings around the target: lower it once you have measured from which percentage the valve passes water. Not below 5 % (smaller steps are not sent). With several valves in a room the highest value applies.",
   "devices.valve_direct_badge": "Direct valve",
   "devices.info.intro": "What each setting does is under the info icon next to it. How RoomMind drives thermostats and ACs is in the documentation.",
   "hero.window_open": "Window open, paused",

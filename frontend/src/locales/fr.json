@@ -193,6 +193,8 @@
   "devices.valve_closing_mode": "La seconde valeur est",
   "devices.valve_closing_mode_closing_degree": "Degré de fermeture",
   "devices.valve_closing_mode_idle_opening": "Ouverture au repos",
+  "devices.valve_min_opening": "Ouverture minimale en chauffe",
+  "devices.valve_min_opening_info": "Plus petite ouverture de vanne que RoomMind maintient en chauffe (15 % par défaut). Si le radiateur fournit presque toute sa chaleur avec une faible ouverture, la pièce oscille autour de la consigne : réduisez-la après avoir mesuré à partir de quel pourcentage la vanne laisse passer l'eau. Pas en dessous de 5 % (les pas plus petits ne sont pas envoyés). Avec plusieurs vannes dans une pièce, la valeur la plus élevée s'applique.",
   "devices.valve_direct_badge": "Vanne directe",
   "devices.info.intro": "Ce que fait chaque réglage est expliqué sous l'icône d'info à côté. La façon dont RoomMind pilote thermostats et climatiseurs est décrite dans la documentation.",
   "hero.window_open": "Fenêtre ouverte - en pause",

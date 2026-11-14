@@ -155,6 +155,29 @@ async def test_the_closing_mode_is_stored_only_when_set(ws_hass, store, connecti
 
 
 @pytest.mark.asyncio
+async def test_the_valve_floor_is_stored_only_when_set(ws_hass, store, connection):
+    await store.async_load()
+    await _save(ws_hass, connection, [_device(valve_opening_entity=OPEN, valve_closing_entity=CLOSE)])
+    [device] = store.get_room("living")["devices"]
+    assert "valve_min_opening" not in device
+
+    await _save(
+        ws_hass,
+        connection,
+        [_device(valve_opening_entity=OPEN, valve_closing_entity=CLOSE, valve_min_opening=5)],
+        msg_id=2,
+    )
+    [device] = store.get_room("living")["devices"]
+    assert device["valve_min_opening"] == 5
+
+
+def test_a_valve_floor_needs_a_trv():
+    with pytest.raises(vol.Invalid):
+        _validate_device_valve({"entity_id": "climate.ac", "type": "ac", "valve_min_opening": 5})
+    assert _validate_device_valve({"entity_id": "climate.trv", "type": "trv", "valve_min_opening": 5})
+
+
+@pytest.mark.asyncio
 async def test_a_changed_closing_mode_is_left_to_the_next_cycle(ws_hass, store, connection):
     """Releasing in the old mode would open a TRV-ZBT while idle; the coordinator rewrites it."""
     await store.async_load()
