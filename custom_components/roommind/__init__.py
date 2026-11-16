@@ -149,6 +149,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok: bool = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         await _async_release_all_valves(hass)
+        coordinator = hass.data[DOMAIN].get(entry.entry_id)
+        if coordinator is not None:
+            # Fork: the why-log saves with a delay; a reload must not lose the last lines
+            await coordinator.decision_log.async_flush()
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
         hass.data[DOMAIN].pop("coordinator", None)
