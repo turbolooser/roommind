@@ -75,3 +75,18 @@ async def test_panel_registered_only_once():
     with patch("custom_components.roommind.async_register_built_in_panel") as reg:
         await _async_register_panel(hass)
         assert not reg.called
+
+
+@pytest.mark.asyncio
+async def test_the_panel_is_for_admins_only():
+    """The panel edits the whole setup; non-admins keep the dashboard card and the room entities."""
+    hass = _hass()
+    with (
+        patch("custom_components.roommind.async_register_built_in_panel") as reg,
+        patch("custom_components.roommind.Path") as path_cls,
+    ):
+        path_cls.return_value.parent.__truediv__.return_value.__truediv__.return_value.exists.return_value = True
+        await _async_register_panel(hass)
+    reg.assert_called_once()
+    assert reg.call_args.kwargs["require_admin"] is True
+    assert reg.call_args.kwargs["frontend_url_path"] == "roommind"
