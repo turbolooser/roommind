@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import timedelta
 from functools import partial
 from typing import Any
@@ -109,6 +110,7 @@ from .managers.compressor_group_manager import (
     resolve_master_action,
 )
 from .managers.cover_orchestrator import CoverOrchestrator, CoverResult
+from .managers.decision_log import DecisionFacts, DecisionLog
 from .managers.demand_controller import compute_demand
 from .managers.device_setpoint_tracker import DeviceSetpointTracker
 from .managers.ekf_training_manager import EkfTrainingManager
@@ -326,6 +328,8 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         # Learns each room's residual scale from the afterglow after every run
         self._residual_learner = ResidualHeatLearner()
         self._valve_lead_tracker = ValveLeadTracker()
+        # Fork: why-log, one line per room when mode, target or reason changes
+        self.decision_log = DecisionLog(hass)
         # AC rebound charge (air pulled below the building mass while cooling)
         self._rebound_tracker = AcReboundTracker()
         # Inputs the model learned from this cycle, recorded for the analytics backtest
@@ -465,6 +469,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             self._head_offsets.load_state(settings.get("ac_head_offsets", {}))
             self._ventilation.load_state(settings.get("ventilation_state", {}))
             self._valve_lead_tracker.load_state(settings.get("valve_lead", {}))
+            await self.decision_log.async_load()
             self._model_loaded = True
 
         # Initialize history store (once)
@@ -1369,6 +1374,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         compressor_forced_off: set[str] = set()
         compressor_protection_reason: str | None = None
         compressor_protection_until: float | None = None
+        compressor_blocked = False
 
         # With a plan only devices with an active command run. Everything else is
         # parked, also a device the plan leaves out altogether (unknown state,
@@ -1432,6 +1438,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                 else set(all_device_eids) - sitting_out
             )
             if compressor_forced_off and _mode_relevant_eids and compressor_forced_off >= _mode_relevant_eids:
+                compressor_blocked = True
                 mode = MODE_IDLE
                 power_fraction = 0.0
                 compressor_forced_off.clear()
@@ -1658,6 +1665,36 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             self._valve_lead_tracker.update(
                 area_id, time.time(), current_temp, mode, targets.heat, band=band, raw_demand=raw_demand
             )
+
+        self._record_decision(
+            area_id,
+            room,
+            settings,
+            DecisionFacts(
+                mode=mode,
+                heat=targets.heat,
+                cool=targets.cool,
+                target_reason=target_reason,
+                current_temp=current_temp,
+                outdoor_temp=self.outdoor_temp_effective,
+                climate_mode=climate_mode,
+                climate_active=climate_active,
+                has_external_sensor=has_external_sensor,
+                waiting_for_temp=waiting_for_temp,
+                window_pending=window_pending,
+                window_open=window_open,
+                open_windows=tuple(eid for eid, st in window_states.items() if st in ("on", "open")),
+                force_off=force_off,
+                compressor_blocked=compressor_blocked,
+                compressor_hold=bool(compressor_forced_on),
+                mpc=controller.last_plan is not None,
+                preheat=bool(controller.preheat and controller.preheat["mode"] == mode),
+                residual_heat=q_residual or 0.0,
+                setback=bool(controller.setback_eids),
+                mold_boost=mold_boost,
+                price_shifted=price_shift != (0.0, 0.0),
+            ),
+        )
 
         display_mode, display_pf = await self._observe_and_train(
             area_id=area_id,
@@ -3073,6 +3110,21 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         except KeyError:
             pass  # deleted in the settings panel meanwhile
 
+    def _record_decision(self, area_id: str, room: dict, settings: dict, facts: DecisionFacts) -> None:
+        """Hand the cycle's decision to the why-log; the outdoor gate is judged like the controller does."""
+        try:
+            can_heat, can_cool = get_can_heat_cool(
+                room,
+                self.outdoor_temp_effective,
+                settings.get("outdoor_cooling_min", DEFAULT_OUTDOOR_COOLING_MIN),
+                settings.get("outdoor_heating_max", DEFAULT_OUTDOOR_HEATING_MAX),
+                acs_can_heat=check_acs_can_heat(self.hass, room),
+                override_active=is_override_active(room),
+            )
+            self.decision_log.record(area_id, replace(facts, can_heat=can_heat, can_cool=can_cool))
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Room '%s': why-log entry failed", area_id, exc_info=True)
+
     def _forget_room(self, area_id: str) -> None:
         """Drop a room's entities and in-memory run state."""
         from homeassistant.helpers import entity_registry as er
@@ -3113,6 +3165,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         self._afterglow_reading.remove_room(area_id)
         self._residual_learner.remove_room(area_id)
         self._valve_lead_tracker.remove_room(area_id)
+        self.decision_log.forget(area_id)
         self._rebound_tracker.remove_room(area_id)
         self._cover_orchestrator.remove_room(area_id)
         self._entity_areas.discard(area_id)

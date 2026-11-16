@@ -1183,6 +1183,40 @@ async def websocket_boost_learning(
 
 
 # ---------------------------------------------------------------------------
+# Why-log (fork)
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "roommind/decision_log/get",
+        vol.Optional("area_id"): str,
+        vol.Optional("start_ts"): vol.Coerce(float),
+        vol.Optional("end_ts"): vol.Coerce(float),
+        vol.Optional("limit"): vol.All(vol.Coerce(int), vol.Range(min=1, max=5000)),
+    }
+)
+@callback
+def websocket_get_decision_log(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict,
+) -> None:
+    """Return the why-log lines of one room (or all rooms), newest first."""
+    coordinator = _get_coordinator(hass)
+    if coordinator is None:
+        connection.send_result(msg["id"], {"entries": []})
+        return
+    entries = coordinator.decision_log.entries(
+        area_id=msg.get("area_id") or None,
+        start_ts=msg.get("start_ts"),
+        end_ts=msg.get("end_ts"),
+        limit=msg.get("limit"),
+    )
+    connection.send_result(msg["id"], {"entries": entries})
+
+
+# ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
 
@@ -1253,6 +1287,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_settings)
     websocket_api.async_register_command(hass, websocket_save_settings)
     websocket_api.async_register_command(hass, websocket_get_analytics)
+    websocket_api.async_register_command(hass, websocket_get_decision_log)
     websocket_api.async_register_command(hass, websocket_thermal_reset)
     websocket_api.async_register_command(hass, websocket_thermal_reset_all)
     websocket_api.async_register_command(hass, websocket_boost_learning)
