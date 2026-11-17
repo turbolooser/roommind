@@ -76,7 +76,7 @@ from ..utils.device_utils import (
     valve_min_fraction,
 )
 from ..utils.temp_utils import celsius_delta_to_ha, celsius_to_ha_temp
-from .direct_valve import async_release_valve, async_set_valve, clear_valve_cache
+from .direct_valve import async_cancel_kick, async_release_valve, async_set_valve, clear_valve_cache
 from .mpc_optimizer import MPCOptimizer, MPCPlan, preheat_max_blocks, slow_start_penalty
 from .residual_heat import get_min_run_blocks, heat_min_run_blocks, mean_rebound
 from .thermal_model import RoomModelManager
@@ -2976,6 +2976,7 @@ class MPCController:
         """
         valve = self._valve_entities.get(eid)
         if valve is not None and valve.kick:
+            await async_cancel_kick(eid)
             await self._async_release_valve(eid)
 
     async def _call_and_record(
