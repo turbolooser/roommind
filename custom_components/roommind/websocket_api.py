@@ -497,6 +497,8 @@ async def websocket_list_rooms(
                     vol.Optional("valve_closing_entity"): _number_entity_or_empty,
                     # No default: devices without it keep their stored form (#482)
                     vol.Optional("valve_closing_mode"): vol.In(VALVE_CLOSING_MODES),
+                    # Fork: TRV-ZBT valve kick, off unless set
+                    vol.Optional("valve_kick"): bool,
                     # No default either: a missing floor is the global one (15 %)
                     vol.Optional("valve_min_opening"): vol.All(
                         vol.Coerce(int), vol.Range(min=VALVE_MIN_OPENING_MIN_PCT, max=VALVE_MIN_OPENING_MAX_PCT)
