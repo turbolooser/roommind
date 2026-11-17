@@ -22,8 +22,10 @@ from .const import (
     DOMAIN,
     MAX_CO2_THRESHOLD,
     MAX_PRICE_SHIFT_K,
+    MAX_TARGET_TEMP,
     MIN_CO2_THRESHOLD,
     MIN_OCCUPANCY_ECO_DELAY_MINUTES,
+    MIN_TARGET_TEMP,
     OVERRIDE_CUSTOM,
     OVERRIDE_TYPES,
     VENTILATION_DOMAINS,
@@ -191,6 +193,23 @@ _ROOM_SAVE_FIELDS = (
     "voc_sensor",
     "voc_threshold",
     "ventilation_entity",
+)
+
+# Same limits as the room climate entity; also turns away nan/inf
+_TARGET_TEMP = vol.All(vol.Coerce(float), vol.Range(min=MIN_TARGET_TEMP, max=MAX_TARGET_TEMP))
+
+# What the dashboard card saves; the only room fields a non-admin may send
+_USER_ROOM_FIELDS = frozenset(
+    {
+        "comfort_temp",
+        "eco_temp",
+        "comfort_heat",
+        "comfort_cool",
+        "eco_heat",
+        "eco_cool",
+        "climate_mode",
+        "climate_control_enabled",
+    }
 )
 
 _SETTINGS_SAVE_FIELDS = (
@@ -505,12 +524,12 @@ async def websocket_list_rooms(
         vol.Optional("window_open_delay"): vol.Coerce(int),
         vol.Optional("window_close_delay"): vol.Coerce(int),
         vol.Optional("window_pause_mode"): vol.In(WINDOW_PAUSE_MODES),
-        vol.Optional("comfort_temp"): vol.Coerce(float),
-        vol.Optional("eco_temp"): vol.Coerce(float),
-        vol.Optional("comfort_heat"): vol.Coerce(float),
-        vol.Optional("comfort_cool"): vol.Coerce(float),
-        vol.Optional("eco_heat"): vol.Coerce(float),
-        vol.Optional("eco_cool"): vol.Coerce(float),
+        vol.Optional("comfort_temp"): _TARGET_TEMP,
+        vol.Optional("eco_temp"): _TARGET_TEMP,
+        vol.Optional("comfort_heat"): _TARGET_TEMP,
+        vol.Optional("comfort_cool"): _TARGET_TEMP,
+        vol.Optional("eco_heat"): _TARGET_TEMP,
+        vol.Optional("eco_cool"): _TARGET_TEMP,
         vol.Optional("presence_persons"): [str],
         vol.Optional("display_name"): str,
         vol.Optional("heating_system_type"): vol.In(["", "radiator", "underfloor"]),
@@ -575,6 +594,12 @@ async def websocket_save_room(
     for key in _ROOM_SAVE_FIELDS:
         if key in msg:
             config[key] = msg[key]
+
+    # Non-admins (dashboard card) may change targets, mode and control of an existing room only
+    user = connection.user
+    if (user is None or not user.is_admin) and (store.get_room(area_id) is None or set(config) - _USER_ROOM_FIELDS):
+        connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED, "Only administrators can change this")
+        return
 
     # Reject RoomMind's own entities to prevent self-assignment (#86)
     own_prefix = f"{DOMAIN}_"
@@ -646,6 +671,7 @@ async def _async_release_dropped_valves(
 # ---------------------------------------------------------------------------
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "roommind/rooms/delete",
@@ -740,8 +766,8 @@ async def async_resume_room(hass: HomeAssistant, area_id: str) -> None:
         vol.Required("type"): "roommind/override/set",
         vol.Required("area_id"): str,
         vol.Required("override_type"): vol.In(OVERRIDE_TYPES),
-        vol.Optional("heat"): vol.Coerce(float),
-        vol.Optional("cool"): vol.Coerce(float),
+        vol.Optional("heat"): _TARGET_TEMP,
+        vol.Optional("cool"): _TARGET_TEMP,
         vol.Optional("duration"): vol.Coerce(float),  # hours (omit or 0 for permanent)
         # Until the active schedule's next block boundary; `duration` is the fallback without one
         vol.Optional("until_schedule_change", default=False): bool,
@@ -869,6 +895,7 @@ async def websocket_get_settings(
 # ---------------------------------------------------------------------------
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "roommind/settings/save",
@@ -1064,6 +1091,9 @@ async def websocket_get_analytics(
 ) -> None:
     """Return analytics data for a room."""
     store = hass.data[DOMAIN]["store"]
+    if store.get_room(msg["area_id"]) is None:
+        connection.send_error(msg["id"], "not_found", f"Room '{msg['area_id']}' not found")
+        return
     coordinator = _get_coordinator(hass)
     result = await build_analytics_data(
         hass,
@@ -1082,6 +1112,7 @@ async def websocket_get_analytics(
 # ---------------------------------------------------------------------------
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "roommind/thermal/reset",
@@ -1097,6 +1128,9 @@ async def websocket_thermal_reset(
     """Reset thermal model and history for a single room."""
     store = hass.data[DOMAIN]["store"]
     area_id = msg["area_id"]
+    if store.get_room(area_id) is None:
+        connection.send_error(msg["id"], "not_found", f"Room '{area_id}' not found")
+        return
     coordinator = _get_coordinator(hass)
 
     # Clear learned model and residual heat tracking
@@ -1119,6 +1153,7 @@ async def websocket_thermal_reset(
 # ---------------------------------------------------------------------------
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "roommind/thermal/reset_all"})
 @websocket_api.async_response
 async def websocket_thermal_reset_all(
@@ -1147,6 +1182,7 @@ async def websocket_thermal_reset_all(
     connection.send_result(msg["id"], {"success": True})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "roommind/model/boost_learning",
@@ -1187,6 +1223,7 @@ async def websocket_boost_learning(
 # ---------------------------------------------------------------------------
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "roommind/decision_log/get",
@@ -1221,6 +1258,7 @@ def websocket_get_decision_log(
 # ---------------------------------------------------------------------------
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "roommind/diagnostics/get"})
 @websocket_api.async_response
 async def websocket_get_diagnostics(
