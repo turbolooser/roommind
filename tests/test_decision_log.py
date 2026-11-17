@@ -386,21 +386,25 @@ async def test_coordinator_forget_room_drops_log(hass, mock_config_entry):
 
 
 # ---------------------------------------------------------------------------
-# Panel texts: every key the backend sends has a German and English text
+# No panel tab: the log is read over the WebSocket only, so the frontend keeps
+# no texts or component for it
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("lang", ["de", "en"])
-def test_panel_texts_for_every_key(lang):
+def test_panel_has_no_decision_log_texts(lang):
     import json
     from pathlib import Path
 
     texts = json.loads(
         (Path(__file__).parent.parent / "frontend" / "src" / "locales" / f"{lang}.json").read_text(encoding="utf-8")
     )
-    missing = [f"decision_log.reason.{r}" for r in REASONS if f"decision_log.reason.{r}" not in texts]
-    missing += [
-        f"decision_log.target_reason.{t}" for t in TARGET_REASONS if f"decision_log.target_reason.{t}" not in texts
-    ]
-    assert missing == []
-    assert texts["decision_log.tab"]
+    assert [k for k in texts if k.startswith("decision_log.")] == []
+
+
+def test_panel_has_no_decision_log_tab():
+    from pathlib import Path
+
+    src = Path(__file__).parent.parent / "frontend" / "src"
+    assert not (src / "components" / "rs-decision-log.ts").exists()
+    assert "decision_log" not in (src / "roommind-panel.ts").read_text(encoding="utf-8")
