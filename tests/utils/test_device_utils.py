@@ -834,7 +834,7 @@ def test_valve_trvs_ignore_the_direct_setpoint_mode():
     assert get_direct_setpoint_eids(devices) == {"climate.d"}
     assert get_setpoint_offset(devices, "climate.v") == 0.0
     assert get_setpoint_offset(devices, "climate.d") == 1.0
-    assert get_valve_entities(devices) == {"climate.v": ("number.v_open", "number.v_close", False)}
+    assert get_valve_entities(devices) == {"climate.v": ("number.v_open", "number.v_close", False, False)}
     assert configured_valves({"a": {"devices": devices}, "b": {}}) == get_valve_entities(devices)
 
 
