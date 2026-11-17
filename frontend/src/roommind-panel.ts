@@ -16,7 +16,6 @@ import {
 } from "./components/settings/settings-categories";
 import "./components/rs-settings";
 import "./components/rs-analytics";
-import "./components/rs-decision-log";
 import "./components/dashboard/rs-dashboard";
 import "./components/dashboard/rs-dashboard-edit";
 import "./components/schedule/rs-schedule-editor";
@@ -24,7 +23,7 @@ import "./components/schedule/rs-schedule-overview";
 import type { RsScheduleEditor } from "./components/schedule/rs-schedule-editor";
 import "./components/shared/rs-icon-button";
 
-type TabId = "areas" | "analytics" | "why" | "schedules" | "settings";
+type TabId = "areas" | "analytics" | "schedules" | "settings";
 
 /** Panel width from which settings show list and panel side by side (design system). */
 const SETTINGS_WIDE_MIN = 900;
@@ -354,7 +353,6 @@ export class RoomMindPanel extends LitElement {
     const tabLabels: Record<TabId, string> = {
       areas: localize("panel.tab.rooms", l),
       analytics: localize("tabs.analytics", l),
-      why: localize("decision_log.tab", l),
       schedules: localize("panel.tab.schedules", l),
       settings: localize("panel.tab.settings", l),
     };
@@ -499,8 +497,6 @@ export class RoomMindPanel extends LitElement {
           .controlMode=${this._controlMode}
           @room-selected=${this._onAnalyticsRoomSelected}
         ></rs-analytics>`;
-      case "why":
-        return html`<rs-decision-log .hass=${this.hass} .rooms=${this._rooms}></rs-decision-log>`;
       case "schedules":
         return this._roomsLoaded
           ? html`<rs-schedule-overview
@@ -1030,9 +1026,6 @@ export class RoomMindPanel extends LitElement {
       this._activeTab = "analytics";
       this._selectedAreaId = null;
       this._analyticsRoom = "";
-    } else if (path === "/why") {
-      this._activeTab = "why";
-      this._selectedAreaId = null;
     } else if (path === "/settings" || path.startsWith("/settings/")) {
       this._activeTab = "settings";
       this._selectedAreaId = null;

@@ -5,6 +5,7 @@ turns them into a fixed reason key, ``DecisionLog`` keeps a line only when the
 mode, the heat/cool target or one of the reasons differs from the room's last
 line. Lines older than ``DECISION_LOG_DAYS`` fall out. The log lives in its own
 HA ``Store`` (``roommind_decision_log``), so the main storage stays untouched.
+There is no panel tab: admins read it over ``roommind/decision_log/get``.
 """
 
 from __future__ import annotations
