@@ -11,7 +11,7 @@
 | custom\_components/roommind/const.py                               |      231 |        0 |    100% |           |
 | custom\_components/roommind/control/\_\_init\_\_.py                |        0 |        0 |    100% |           |
 | custom\_components/roommind/control/analytics\_simulator.py        |      242 |        2 |     99% |   83, 115 |
-| custom\_components/roommind/control/direct\_valve.py               |      221 |       22 |     90% |311-319, 342-343, 347-352, 358-360, 379-380 |
+| custom\_components/roommind/control/direct\_valve.py               |      226 |       24 |     89% |311-319, 342-343, 347-352, 358-360, 384-385, 415-416 |
 | custom\_components/roommind/control/mpc\_controller.py             |     1568 |       32 |     98% |295, 341-342, 418-419, 425-426, 438-448, 787-789, 873-880, 1181, 2106, 2342, 2345, 2485-2494, 2509, 2988, 3468, 3470, 3481, 3483, 3488, 3493, 3515, 3517 |
 | custom\_components/roommind/control/mpc\_optimizer.py              |      427 |        0 |    100% |           |
 | custom\_components/roommind/control/residual\_heat.py              |       48 |        0 |    100% |           |
@@ -60,7 +60,7 @@
 | custom\_components/roommind/utils/sensor\_utils.py                 |       29 |        1 |     97% |        25 |
 | custom\_components/roommind/utils/temp\_utils.py                   |       26 |        0 |    100% |           |
 | custom\_components/roommind/websocket\_api.py                      |      397 |        3 |     99% |754, 994-999 |
-| **TOTAL**                                                          | **11142** |  **233** | **98%** |           |
+| **TOTAL**                                                          | **11147** |  **235** | **98%** |           |
 
 
 ## Setup coverage badge
