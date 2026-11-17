@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_e1a10107a084a5d3_binary_sensor_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-16 08:55 +0000
+            created at 2026-11-17 05:20 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -334,25 +334,26 @@
     <p class="run run2"><span class="n"><a id="t252" href="#t252">252</a></span><span class="t">            <span class="nam">sidebar_title</span><span class="op">=</span><span class="str">&quot;RoomMind&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t253" href="#t253">253</a></span><span class="t">            <span class="nam">sidebar_icon</span><span class="op">=</span><span class="str">&quot;mdi:home-thermometer&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t254" href="#t254">254</a></span><span class="t">            <span class="nam">frontend_url_path</span><span class="op">=</span><span class="str">&quot;roommind&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">            <span class="nam">config</span><span class="op">=</span><span class="op">{</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t">                <span class="str">&quot;_panel_custom&quot;</span><span class="op">:</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t">                    <span class="str">&quot;name&quot;</span><span class="op">:</span> <span class="str">&quot;roommind-panel&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">                    <span class="str">&quot;embed_iframe&quot;</span><span class="op">:</span> <span class="key">False</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t259" href="#t259">259</a></span><span class="t">                    <span class="str">&quot;trust_external&quot;</span><span class="op">:</span> <span class="key">False</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t260" href="#t260">260</a></span><span class="t">                    <span class="com"># Version query so browsers and the Companion app&#x27;s WebView</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t261" href="#t261">261</a></span><span class="t">                    <span class="com"># fetch the new bundle after an update. Without it the URL is</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t262" href="#t262">262</a></span><span class="t">                    <span class="com"># identical across releases, the WebView keeps serving its</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t263" href="#t263">263</a></span><span class="t">                    <span class="com"># cached copy, and new panel features stay invisible until the</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t264" href="#t264">264</a></span><span class="t">                    <span class="com"># user clears the app cache by hand.</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t265" href="#t265">265</a></span><span class="t">                    <span class="str">&quot;js_url&quot;</span><span class="op">:</span> <span class="fst">f&quot;</span><span class="fst">/roommind/roommind-panel.js?v=</span><span class="op">{</span><span class="nam">VERSION</span><span class="op">}</span><span class="fst">&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t266" href="#t266">266</a></span><span class="t">                <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t267" href="#t267">267</a></span><span class="t">            <span class="op">}</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t268" href="#t268">268</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t269" href="#t269">269</a></span><span class="t">    <span class="key">except</span> <span class="nam">ValueError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t270" href="#t270">270</a></span><span class="t">        <span class="nam">_LOGGER</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">&quot;RoomMind panel already registered&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t271" href="#t271">271</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t272" href="#t272">272</a></span><span class="t">    <span class="nam">hass</span><span class="op">.</span><span class="nam">data</span><span class="op">[</span><span class="nam">DOMAIN</span><span class="op">]</span><span class="op">[</span><span class="str">&quot;panel_registered&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t273" href="#t273">273</a></span><span class="t">    <span class="nam">_LOGGER</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span><span class="str">&quot;RoomMind panel registered in sidebar&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t255" href="#t255">255</a></span><span class="t">            <span class="nam">require_admin</span><span class="op">=</span><span class="key">True</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t256" href="#t256">256</a></span><span class="t">            <span class="nam">config</span><span class="op">=</span><span class="op">{</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t257" href="#t257">257</a></span><span class="t">                <span class="str">&quot;_panel_custom&quot;</span><span class="op">:</span> <span class="op">{</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t258" href="#t258">258</a></span><span class="t">                    <span class="str">&quot;name&quot;</span><span class="op">:</span> <span class="str">&quot;roommind-panel&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t259" href="#t259">259</a></span><span class="t">                    <span class="str">&quot;embed_iframe&quot;</span><span class="op">:</span> <span class="key">False</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t260" href="#t260">260</a></span><span class="t">                    <span class="str">&quot;trust_external&quot;</span><span class="op">:</span> <span class="key">False</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t261" href="#t261">261</a></span><span class="t">                    <span class="com"># Version query so browsers and the Companion app&#x27;s WebView</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t262" href="#t262">262</a></span><span class="t">                    <span class="com"># fetch the new bundle after an update. Without it the URL is</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t263" href="#t263">263</a></span><span class="t">                    <span class="com"># identical across releases, the WebView keeps serving its</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t264" href="#t264">264</a></span><span class="t">                    <span class="com"># cached copy, and new panel features stay invisible until the</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t265" href="#t265">265</a></span><span class="t">                    <span class="com"># user clears the app cache by hand.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t266" href="#t266">266</a></span><span class="t">                    <span class="str">&quot;js_url&quot;</span><span class="op">:</span> <span class="fst">f&quot;</span><span class="fst">/roommind/roommind-panel.js?v=</span><span class="op">{</span><span class="nam">VERSION</span><span class="op">}</span><span class="fst">&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t267" href="#t267">267</a></span><span class="t">                <span class="op">}</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t268" href="#t268">268</a></span><span class="t">            <span class="op">}</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t269" href="#t269">269</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t270" href="#t270">270</a></span><span class="t">    <span class="key">except</span> <span class="nam">ValueError</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t271" href="#t271">271</a></span><span class="t">        <span class="nam">_LOGGER</span><span class="op">.</span><span class="nam">debug</span><span class="op">(</span><span class="str">&quot;RoomMind panel already registered&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t272" href="#t272">272</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t273" href="#t273">273</a></span><span class="t">    <span class="nam">hass</span><span class="op">.</span><span class="nam">data</span><span class="op">[</span><span class="nam">DOMAIN</span><span class="op">]</span><span class="op">[</span><span class="str">&quot;panel_registered&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t274" href="#t274">274</a></span><span class="t">    <span class="nam">_LOGGER</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span><span class="str">&quot;RoomMind panel registered in sidebar&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
 </main>
 <footer>
     <div class="content">
@@ -362,7 +363,7 @@
             <a class="nav" href="z_e1a10107a084a5d3_binary_sensor_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.3">coverage.py v7.17.3</a>,
-            created at 2026-11-16 08:55 +0000
+            created at 2026-11-17 05:20 +0000
         </p>
     </div>
 </footer>
