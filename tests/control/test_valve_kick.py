@@ -143,7 +143,21 @@ async def test_kick_feeds_cold_then_hot_then_the_saved_room_temperature():
     ):
         await direct_valve._async_kick_once(hass, TRV, "a")
 
-    assert [(e, v) for _, e, v in _writes(hass)] == [(EXT, 27.5), (EXT, 31.5), (EXT, 18.4)]
+    assert [(e, v) for _, e, v in _writes(hass)] == [(EXT, 3.0), (EXT, 32.0), (EXT, 18.4)]
+
+
+@pytest.mark.asyncio
+async def test_kick_pulses_beyond_the_setpoint_range_whatever_setpoint_ha_still_shows():
+    """17.11.2026: RoomMind's new setpoint reached HA after the kick started; the kick pulsed around the old one."""
+    for stale in (5.0, 15.0, 29.5):
+        states = {TRV: _trv_at(stale), EXT: _number(18.4, hi=99.9, step=0.1), SEL: _select()}
+        hass = _hass(states)
+        with (
+            patch.object(direct_valve, "_device_entity", _entities),
+            patch.object(direct_valve.asyncio, "sleep", _no_sleep),
+        ):
+            await direct_valve._async_kick_once(hass, TRV, "a")
+        assert [v for _, e, v in _writes(hass)][:2] == [3.0, 32.0]
 
 
 @pytest.mark.asyncio
@@ -155,7 +169,7 @@ async def test_kick_keeps_a_room_temperature_someone_else_fed_meanwhile():
     def write(domain, service, data, **_kw):
         if data["entity_id"] == EXT:
             # the automation lands right after the hot pulse
-            states[EXT] = _number(18.5 if data["value"] == 22.0 else data["value"], hi=99.9, step=0.1)
+            states[EXT] = _number(18.5 if data["value"] == 32.0 else data["value"], hi=99.9, step=0.1)
 
     hass.services.async_call.side_effect = write
     with (
@@ -164,7 +178,7 @@ async def test_kick_keeps_a_room_temperature_someone_else_fed_meanwhile():
     ):
         await direct_valve._async_kick_once(hass, TRV, "a")
 
-    assert [(e, v) for _, e, v in _writes(hass)] == [(EXT, 18.0), (EXT, 22.0)]
+    assert [(e, v) for _, e, v in _writes(hass)] == [(EXT, 3.0), (EXT, 32.0)]
 
 
 @pytest.mark.asyncio
@@ -178,9 +192,9 @@ async def test_kick_on_the_built_in_sensor_switches_to_remote_and_back():
         await direct_valve._async_kick_once(hass, TRV, "a")
 
     assert [(e, v) for _, e, v in _writes(hass)] == [
-        (EXT, 18.0),
+        (EXT, 3.0),
         (SEL, "remote_temperature"),
-        (EXT, 22.0),
+        (EXT, 32.0),
         (SEL, "local_temperature"),
     ]
 
@@ -207,7 +221,7 @@ async def test_kick_restores_on_cancel():
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
 
-    assert [(e, v) for _, e, v in _writes(hass)] == [(EXT, 18.0), (EXT, 18.4)]
+    assert [(e, v) for _, e, v in _writes(hass)] == [(EXT, 3.0), (EXT, 18.4)]
 
 
 @pytest.mark.asyncio
@@ -237,7 +251,7 @@ async def test_leaving_off_the_kick_waits_for_the_trv_state():
         await direct_valve._async_kick_once(hass, TRV, "a")
 
     assert slept[0] == 1.0
-    assert [v for _, e, v in _writes(hass) if e == EXT][:2] == [27.5, 31.5]
+    assert [v for _, e, v in _writes(hass) if e == EXT][:2] == [3.0, 32.0]
 
 
 # --- controller: idle 0 before off ----------------------------------------------------------
