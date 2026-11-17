@@ -76,7 +76,7 @@ from ..utils.device_utils import (
     valve_min_fraction,
 )
 from ..utils.temp_utils import celsius_delta_to_ha, celsius_to_ha_temp
-from .direct_valve import async_release_valve, async_set_valve, clear_valve_cache
+from .direct_valve import async_cancel_kick, async_release_valve, async_set_valve, clear_valve_cache
 from .mpc_optimizer import MPCOptimizer, MPCPlan, preheat_max_blocks, slow_start_penalty
 from .residual_heat import get_min_run_blocks, heat_min_run_blocks, mean_rebound
 from .thermal_model import RoomModelManager
@@ -2596,6 +2596,7 @@ class MPCController:
                         await self._async_hold_retarget(cmd.entity_id, targets, current_temp)
                     continue
                 if cmd.entity_id in _forced_off and cmd.active:
+                    await self._async_release_before_idle(cmd.entity_id)
                     await async_idle_device(
                         self.hass,
                         cmd.entity_id,
@@ -2670,6 +2671,7 @@ class MPCController:
                         # (e.g. 19.3 -> 19.5) could nudge the valve open on
                         # sensor fluctuation, causing a mechanical twitch
                         # and unnecessary heat demand. (#168)
+                        await self._async_release_before_idle(cmd.entity_id)
                         await async_idle_device(
                             self.hass,
                             cmd.entity_id,
@@ -2700,6 +2702,7 @@ class MPCController:
                 trv_target = trv_heat_boost if self.has_external_sensor else effective_target
             for eid in thermostats:
                 if eid in _forced_off:
+                    await self._async_release_before_idle(eid)
                     await async_idle_device(
                         self.hass,
                         eid,
@@ -2816,6 +2819,7 @@ class MPCController:
                 )
             for eid in thermostats:
                 if eid in _forced_off:
+                    await self._async_release_before_idle(eid)
                     await async_idle_device(
                         self.hass,
                         eid,
@@ -2827,6 +2831,7 @@ class MPCController:
                     )
                     await self._async_release_valve(eid)
                     continue
+                await self._async_release_before_idle(eid)
                 await self._call("set_hvac_mode", {"entity_id": eid, "hvac_mode": "off"})
                 await self._async_release_valve(eid)
         elif mode == MODE_IDLE:
@@ -2845,6 +2850,7 @@ class MPCController:
                     if not await self._async_hold_valve(eid, targets):
                         await self._async_hold_retarget(eid, targets, current_temp)
                     continue
+                await self._async_release_before_idle(eid)
                 if await async_idle_device(
                     self.hass,
                     eid,
@@ -2922,6 +2928,7 @@ class MPCController:
                 area_id=self._area_id,
                 target=target,
                 idle_opening=valve.idle_opening,
+                kick=valve.kick,
             )
 
     async def _async_hold_valve(self, eid: str, targets: TargetTemps) -> bool:
@@ -2943,6 +2950,7 @@ class MPCController:
             target=targets.heat,
             urgent=True,
             idle_opening=valve.idle_opening,
+            kick=valve.kick,
         )
         return True
 
@@ -2951,8 +2959,25 @@ class MPCController:
         valve = self._valve_entities.get(eid)
         if valve is not None:
             await async_release_valve(
-                self.hass, eid, valve.opening, valve.closing, area_id=self._area_id, idle_opening=valve.idle_opening
+                self.hass,
+                eid,
+                valve.opening,
+                valve.closing,
+                area_id=self._area_id,
+                idle_opening=valve.idle_opening,
+                kick=valve.kick,
             )
+
+    async def _async_release_before_idle(self, eid: str) -> None:
+        """Fork, valve kick: idle 0 reaches the TRV-ZBT before it may go off (quirk sonoff_trv_zbt).
+
+        Off, the TRV-ZBT moves to its idle opening; with the held opening still there the
+        valve would stay open. Valves without kick keep the old order.
+        """
+        valve = self._valve_entities.get(eid)
+        if valve is not None and valve.kick:
+            await async_cancel_kick(eid)
+            await self._async_release_valve(eid)
 
     async def _call_and_record(
         self, eid: str, record: tuple[float | None, float | None], *args: Any, **kwargs: Any
