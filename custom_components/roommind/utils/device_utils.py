@@ -380,6 +380,7 @@ class ValveEntities(NamedTuple):
     opening: str
     closing: str
     idle_opening: bool = False  # ``closing`` is the opening while idle, not a closing degree (#482)
+    kick: bool = False  # fork: TRV-ZBT valve kick (quirk sonoff_trv_zbt), only with idle_opening
 
 
 def get_valve_entities(devices: list[dict]) -> dict[str, ValveEntities]:
@@ -394,7 +395,8 @@ def get_valve_entities(devices: list[dict]) -> dict[str, ValveEntities]:
         opening = d.get("valve_opening_entity") or None
         closing = d.get("valve_closing_entity") or None
         if eid and opening and closing and d.get("type") == DEVICE_TYPE_TRV:
-            result[eid] = ValveEntities(opening, closing, d.get("valve_closing_mode") == VALVE_IDLE_OPENING)
+            idle_opening = d.get("valve_closing_mode") == VALVE_IDLE_OPENING
+            result[eid] = ValveEntities(opening, closing, idle_opening, idle_opening and bool(d.get("valve_kick")))
     return result
 
 
