@@ -367,6 +367,11 @@ async def _async_kick_once(hass: HomeAssistant, climate_eid: str, area_id: str) 
     The quirk's cold pulse alone (hot_step off) moves a TRV that idles. RoomMind holds the
     valve with a setpoint above the room, so the TRV already heats: the hot step (quirk
     option ``hot_step``) makes it idle, the restored room makes it heat again.
+
+    The pulses sit ``KICK_DELTA`` beyond the TRV's setpoint range instead of around its
+    setpoint: the kick runs right after RoomMind's own setpoint change, which reaches the
+    HA state 1-3 s later (17.11.2026, twice: the kick pulsed around the old setpoint and
+    the TRV did not change state). Beyond the range no setpoint can hold the state.
     """
     waited = 0.0
     state = hass.states.get(climate_eid)
@@ -404,8 +409,13 @@ async def _async_kick_once(hass: HomeAssistant, climate_eid: str, area_id: str) 
     if was_external:
         saved = _current(hass, external)
     lo, hi = KICK_EXTERNAL_RANGE
-    cold = round(min(hi, max(lo, setpoint - KICK_DELTA)), 1)
-    hot = round(min(hi, max(lo, setpoint + KICK_DELTA)), 1)
+    try:
+        sp_min = float(state.attributes.get("min_temp", setpoint))
+        sp_max = float(state.attributes.get("max_temp", setpoint))
+    except (TypeError, ValueError):
+        sp_min = sp_max = setpoint
+    cold = round(min(hi, max(lo, min(setpoint, sp_min) - KICK_DELTA)), 1)
+    hot = round(min(hi, max(lo, max(setpoint, sp_max) + KICK_DELTA)), 1)
     written: float | None = None
     _LOGGER.debug("Area '%s': kick of '%s', setpoint %s", area_id, climate_eid, setpoint)
     # From the first write on the finally restores the temperature, whatever happens
