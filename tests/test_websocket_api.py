@@ -3907,6 +3907,7 @@ async def test_list_rooms_forwards_air_quality(ws_hass, store, connection):
         "websocket_thermal_reset_all",
         "websocket_boost_learning",
         "websocket_get_diagnostics",
+        "websocket_get_decision_log",
     ],
 )
 def test_configuration_commands_need_an_admin(handler_name):
