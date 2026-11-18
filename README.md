@@ -20,7 +20,7 @@ This fork only adds a layer of tuning on top, specifically for running several A
 
 **→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
-**Upstream base of this release:** fork `2.0.0.6` (like every fork release since `2.0.0.3`) is built on upstream **`v2.0.0`** (commit [`7b96a69`](https://github.com/snazzybean/roommind/commit/7b96a69f)) plus the untagged upstream `main` fixes up to [`b3e5bc0`](https://github.com/snazzybean/roommind/commit/b3e5bc00) (admin-only panel and setup, validated targets, temperature stepper). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
+**Upstream base of this release:** fork `2.0.1.1` is built on upstream **`v2.0.1`** (commit [`9655b4a`](https://github.com/snazzybean/roommind/commit/9655b4a2)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
 
 ---
 
@@ -111,7 +111,7 @@ Measured values show **two decimals** everywhere in the panel: room temperature 
 
 HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
 
-The panel's `js_url` also carries a `?v=<version>` cache buster. Upstream registers it under an URL that is identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.
+The panel's `js_url` also carries a `?v=<version>` cache buster (upstream adopted the same since `v2.0.1`; the fork keeps its extra tests). Before, the URL was identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.
 
 ### 14. Adjustable +/- step, exact entry on the dashboard card
 **Settings → General → Step of the + / − buttons** chooses `0.1`, `0.5` (default, as upstream) or `1 °C` per press (Fahrenheit: `0.2`, `1`, `2 °F`). It applies to the comfort/eco targets in the room panel, the schedule block temperatures and the dashboard card. Stored as the global setting `target_temp_step`; `roommind/rooms/list` hands it to the card.
