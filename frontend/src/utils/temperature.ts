@@ -29,6 +29,37 @@ export function formatTemp(celsius: number, hass: HomeAssistant, decimals = 1): 
   return toDisplay(celsius, hass).toFixed(decimals);
 }
 
+/**
+ * Fork: choices of the global "+/- step" setting (`target_temp_step`, °C). Fahrenheit uses the
+ * rounded equivalents, so the default 0.5 °C keeps the former 1 °F.
+ */
+export const TARGET_TEMP_STEPS = [0.1, 0.5, 1] as const;
+export type TargetTempStep = (typeof TARGET_TEMP_STEPS)[number];
+export const DEFAULT_TARGET_TEMP_STEP: TargetTempStep = 0.5;
+const FAHRENHEIT_STEPS: Record<TargetTempStep, number> = { 0.1: 0.2, 0.5: 1, 1: 2 };
+
+/** The stored step, learned from every rooms/list answer; card and panel each keep a copy. */
+let targetStepC: TargetTempStep = DEFAULT_TARGET_TEMP_STEP;
+
+export function noteTargetStep(step: unknown): void {
+  const known = TARGET_TEMP_STEPS.find((s) => s === step);
+  if (known !== undefined) targetStepC = known;
+}
+
+export function storedTargetStep(): TargetTempStep {
+  return targetStepC;
+}
+
+/** One of the step choices in the user's unit. */
+export function stepInUnit(step: TargetTempStep, hass: HomeAssistant): number {
+  return usesFahrenheit(hass) ? FAHRENHEIT_STEPS[step] : step;
+}
+
+/** Step of the +/- buttons on a target temperature, in the user's unit. */
+export function targetStep(hass: HomeAssistant): number {
+  return stepInUnit(targetStepC, hass);
+}
+
 export function tempStep(hass: HomeAssistant): string {
   return usesFahrenheit(hass) ? "1" : "0.5";
 }
