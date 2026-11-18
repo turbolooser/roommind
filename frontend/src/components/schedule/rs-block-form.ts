@@ -8,8 +8,8 @@ import {
   MAX_TARGET_TEMP_C,
   MIN_TARGET_TEMP_C,
   tempUnit,
+  targetStep,
   toDisplay,
-  usesFahrenheit,
 } from "../../utils/temperature";
 import {
   COVER_CLOSED,
@@ -270,7 +270,7 @@ export class RsBlockForm extends LitElement {
 
   private _renderOwn() {
     const l = this.hass.language;
-    const step = usesFahrenheit(this.hass) ? 1 : 0.5;
+    const step = targetStep(this.hass);
     const min = Math.ceil(toDisplay(MIN_TARGET_TEMP_C, this.hass));
     const max = Math.floor(toDisplay(MAX_TARGET_TEMP_C, this.hass));
     const both = this.sides.heat && this.sides.cool;

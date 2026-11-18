@@ -20,7 +20,7 @@ This fork only adds a layer of tuning on top, specifically for running several A
 
 **→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
-**Upstream base of this release:** fork `1.8.8` is built on upstream **`v1.8.2`** (commit [`0305471`](https://github.com/snazzybean/roommind/commit/0305471662bb5ad509f92638e3f869fe8d8f9c2b)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
+**Upstream base of this release:** fork `2.0.0.6` (like every fork release since `2.0.0.3`) is built on upstream **`v2.0.0`** (commit [`7b96a69`](https://github.com/snazzybean/roommind/commit/7b96a69f)) plus the untagged upstream `main` fixes up to [`b3e5bc0`](https://github.com/snazzybean/roommind/commit/b3e5bc00) (admin-only panel and setup, validated targets, temperature stepper). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
 
 ---
 
@@ -70,7 +70,7 @@ Per device, choose **proportional (offset)** or **direct** setpoints. In offset 
 - `ac_cool_offset_max` / `ac_heat_offset_max` — max K of offset at full power (default `2.0`).
 
 ### 7. Staged idle (setback → off), and setback for TRVs
-Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback. `0` (the default) disables the escalation, so the setback holds as long as the room stays idle; a value `> 0` turns the device off after that many minutes. This timer is independent of upstream's per-device `setback_auto_off` (since upstream v1.8.1, #255): a setback device without that option still goes off after `idle_off_after_minutes`, and with it the upstream release may end the setback earlier.
+Hard-off on an AC head kills air circulation and can lose IR/MQTT state. Idle now does a **setback first**, then escalates to full off only after `idle_off_after_minutes` of continuous setback. `0` (the default) disables the escalation, so the setback holds as long as the room stays idle; a value `> 0` turns the device off after that many minutes. This timer is independent of upstream's per-device `setback_auto_off` (since upstream v1.8.1, #255): a setback device without that option still goes off after `idle_off_after_minutes`, and with it the upstream release may end the setback earlier. While a device is held at its setback, the room card and hero (upstream 2.0, #509) show when it switches off; with staged idle that time comes from `idle_off_after_minutes`, and the earlier of both applies.
 
 **Setback is a supported idle action for thermostats (TRVs) too**, not just climate devices. On a sluggish radiator, `low` (setpoint to device minimum) lets the radiator go cold; after reopening, heat takes minutes to arrive while the room keeps falling — measured at `+0.01 K/h` over 20 hours in one bathroom, i.e. standstill. Setback keeps the valve at `target − offset`, so the radiator stays lukewarm and responds immediately. `low` remains the default and the right choice for battery Zigbee TRVs with deep-sleep issues.
 
@@ -112,6 +112,11 @@ Measured values show **two decimals** everywhere in the panel: room temperature 
 HA 2026.5 removed `ha-textfield`; this fork registers the polyfill reliably even when `ha-entity-picker` was preloaded, so the panel's input fields always render (no more "fields missing until F5").
 
 The panel's `js_url` also carries a `?v=<version>` cache buster. Upstream registers it under an URL that is identical across releases, so the Home Assistant Companion app's WebView keeps serving its cached bundle after an update — new panel features stay invisible until the user clears the app cache by hand (a desktop Ctrl+Shift+R does not reach it). With the version in the URL, browsers and the app fetch the new bundle on their own.
+
+### 14. Adjustable +/- step, exact entry on the dashboard card
+**Settings → General → Step of the + / − buttons** chooses `0.1`, `0.5` (default, as upstream) or `1 °C` per press (Fahrenheit: `0.2`, `1`, `2 °F`). It applies to the comfort/eco targets in the room panel, the schedule block temperatures and the dashboard card. Stored as the global setting `target_temp_step`; `roommind/rooms/list` hands it to the card.
+
+The dashboard card's temperature steppers also take **typed values** like the panel since upstream #532: tap the number, type `21,7` (comma or point), Enter or leave the field. Out-of-range or mistyped entries are rejected and the stored value returns; Escape resets the entry.
 
 ---
 

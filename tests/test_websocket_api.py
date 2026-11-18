@@ -105,6 +105,7 @@ async def test_list_rooms_empty(ws_hass, store, connection):
             "coil_dry_min_cooling_minutes": 10,
             "coil_dry_drain_minutes": 0,
             "compressor_groups": [],
+            "target_temp_step": 0.5,
         },
     )
 
@@ -1460,6 +1461,25 @@ async def test_save_settings_mold_f_rsi_range(ws_hass, store, connection):
         schema({**base, "mold_f_rsi": 0.5})
     with pytest.raises(vol.Invalid):
         schema({**base, "mold_f_rsi": 1.0})
+
+
+@pytest.mark.asyncio
+async def test_save_settings_target_temp_step(ws_hass, store, connection):
+    """Fork: the +/- step is stored, offered to the card via rooms/list and limited to its choices."""
+    await store.async_load()
+    await _save_settings(ws_hass, connection, {"id": 31, "type": "roommind/settings/save", "target_temp_step": 0.1})
+    assert connection.send_result.call_args[0][1]["settings"]["target_temp_step"] == 0.1
+
+    await _list_rooms(ws_hass, connection, {"id": 32, "type": "roommind/rooms/list"})
+    assert connection.send_result.call_args[0][1]["target_temp_step"] == 0.1
+
+    schema = websocket_save_settings._ws_schema
+    base = {"id": 1, "type": "roommind/settings/save"}
+    assert schema({**base, "target_temp_step": "1"})["target_temp_step"] == 1.0
+    assert schema({**base, "target_temp_step": 0.5})["target_temp_step"] == 0.5
+    for bad in (0.2, 0, 2, "fine"):
+        with pytest.raises(vol.Invalid):
+            schema({**base, "target_temp_step": bad})
 
 
 @pytest.mark.asyncio

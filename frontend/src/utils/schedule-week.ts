@@ -381,7 +381,7 @@ export function withTemps(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
-/** Round to the temperature step (0.5 °C, 1 °F) without float noise. */
+/** Round to the temperature step (the +/- step setting) without float noise. */
 export function roundToStep(value: number, step: number): number {
   const rounded = Math.round(value / step) * step;
   return Number(rounded.toFixed(2));

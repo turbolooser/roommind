@@ -271,6 +271,8 @@ export interface GlobalSettings {
   room_order?: string[];
   group_by_floor?: boolean;
   floor_order?: string[];
+  /** Fork: step of the +/- buttons on target temperatures, °C (0.1 / 0.5 / 1). */
+  target_temp_step?: number;
   boost_applied_at?: Record<string, number>;
 }
 
