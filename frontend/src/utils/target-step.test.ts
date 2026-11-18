@@ -129,6 +129,11 @@ async function card(step: number) {
       return {};
     },
   } as unknown as HomeAssistant;
+  // The card registers itself only once HA has defined <home-assistant> (scoped registry).
+  if (!customElements.get("home-assistant")) {
+    customElements.define("home-assistant", class extends HTMLElement {});
+  }
+  await customElements.whenDefined("roommind-room-card");
   const el = document.createElement("roommind-room-card") as RoomMindRoomCard;
   el.setConfig({ type: "custom:roommind-room-card", area: "esszimmer" });
   el.hass = hass;
