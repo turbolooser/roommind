@@ -278,6 +278,8 @@
   "covers.orientation_NW_full": "Northwest",
   "settings.general_title": "General",
   "settings.group_by_floor": "Group rooms by floor",
+  "settings.target_temp_step": "Step of the + / − buttons",
+  "settings.target_temp_step_hint": "For target temperatures in rooms, schedules and the dashboard card. Typed values stay exact.",
   "settings.climate_control_active": "Climate control active",
   "settings.climate_control_hint": "Off: RoomMind keeps measuring and learning but sends no commands. The devices stay as they are and keep regulating on their own.",
   "settings.learning_title": "Model training",

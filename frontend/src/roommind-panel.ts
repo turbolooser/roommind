@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant, PriceStatus, RoomConfig, RoomWithoutArea } from "./types";
 import { loadHaElements } from "./load-ha-elements";
 import { noteServerTime } from "./utils/server-clock";
+import { noteTargetStep } from "./utils/temperature";
 import { localize } from "./utils/localize";
 import { showToast } from "./utils/toast";
 import { errorText } from "./utils/errors";
@@ -693,12 +694,14 @@ export class RoomMindPanel extends LitElement {
         coil_dry_mode: string;
         coil_dry_fan_mode: string;
         server_time?: number;
+        target_temp_step?: number;
       }>({
         type: "roommind/rooms/list",
       });
       if (fetchId < this._roomsAppliedId) return;
       this._roomsAppliedId = fetchId;
       noteServerTime(result.server_time);
+      noteTargetStep(result.target_temp_step);
       this._rooms = result.rooms;
       this._roomsWithoutArea = result.rooms_without_area ?? [];
       this._vacationActive = result.vacation_active ?? false;

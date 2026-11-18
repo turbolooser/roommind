@@ -5,14 +5,14 @@ import {
   MIN_TARGET_TEMP_C,
   tempUnit,
   toCelsius,
+  targetStep,
   toDisplay,
-  usesFahrenheit,
 } from "../../utils/temperature";
 import "./rs-stepper";
 
 /**
  * A target temperature row (icon, label, rs-stepper), styled by `tempRowStyles`. `celsius` in
- * °C; the stepper works in the user's unit (0.5 °C / 1 °F, 5-35 °C) and `onChange` gets °C.
+ * °C; the stepper works in the user's unit (the +/- step setting, 5-35 °C) and `onChange` gets °C.
  */
 export function tempRow(opts: {
   hass: HomeAssistant;
@@ -24,7 +24,7 @@ export function tempRow(opts: {
   onChange: (celsius: number) => void;
 }) {
   const { hass, side, label } = opts;
-  const step = usesFahrenheit(hass) ? 1 : 0.5;
+  const step = targetStep(hass);
   const shown = toDisplay(opts.celsius, hass);
   return html`<div class="temp-row ${side}">
     <span
