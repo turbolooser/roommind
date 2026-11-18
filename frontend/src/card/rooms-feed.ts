@@ -4,11 +4,13 @@
  */
 import type { HomeAssistant, RoomConfig } from "../types";
 import { noteServerTime } from "../utils/server-clock";
+import { noteTargetStep } from "../utils/temperature";
 
 export interface RoomsFeed {
   rooms: Record<string, RoomConfig>;
   climate_control_active: boolean;
   server_time?: number;
+  target_temp_step?: number;
 }
 
 type Listener = (feed: RoomsFeed | null, error: string) => void;
@@ -50,6 +52,7 @@ export function refreshRooms(fresh = false): Promise<void> {
     .callWS<RoomsFeed>({ type: "roommind/rooms/list" })
     .then((result) => {
       noteServerTime(result.server_time);
+      noteTargetStep(result.target_temp_step);
       last = {
         rooms: result.rooms ?? {},
         climate_control_active: result.climate_control_active ?? true,

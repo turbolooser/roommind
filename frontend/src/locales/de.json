@@ -278,6 +278,8 @@
   "covers.orientation_NW_full": "Nordwest",
   "settings.general_title": "Allgemein",
   "settings.group_by_floor": "Räume nach Etagen gruppieren",
+  "settings.target_temp_step": "Schrittweite der + / − Knöpfe",
+  "settings.target_temp_step_hint": "Für Zieltemperaturen in Räumen, Zeitplänen und der Dashboard-Karte. Getippte Werte bleiben exakt.",
   "settings.climate_control_active": "Klimasteuerung aktiv",
   "settings.climate_control_hint": "Aus: RoomMind misst und lernt weiter, schickt aber keine Befehle. Die Geräte bleiben, wie sie sind, und regeln selbst weiter.",
   "settings.learning_title": "Modell-Training",
