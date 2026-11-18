@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { tokens, srOnly } from "../../styles/tokens";
 import { localize, uiLanguage } from "../../utils/localize";
+import { parseDecimalEntry } from "../../utils/format";
 
 /**
  * Number stepper: minus, value, plus. Native buttons with 44 px targets, the value is announced
@@ -179,8 +180,7 @@ export class RsStepper extends LitElement {
 
   private _commit(e: Event) {
     const input = e.target as HTMLInputElement;
-    const text = input.value.trim().replace(",", ".");
-    const value = /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) ? Number(text) : NaN;
+    const value = parseDecimalEntry(input.value);
     // Reject rather than clamp mistyped targets; restore the saved value without emitting.
     if (
       !this.disabled &&

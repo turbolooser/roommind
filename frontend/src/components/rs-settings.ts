@@ -22,7 +22,14 @@ import { fireSaveStatus } from "../utils/events";
 import { VACATION_SENTINEL } from "../utils/constants";
 import { formatMinutes, formatNumber, formatPercent } from "../utils/format";
 import { learningRoomIds } from "../utils/learning";
-import { formatTempLocale, tempUnit, toDisplayDelta } from "../utils/temperature";
+import {
+  DEFAULT_TARGET_TEMP_STEP,
+  formatTempLocale,
+  noteTargetStep,
+  tempUnit,
+  toDisplayDelta,
+  type TargetTempStep,
+} from "../utils/temperature";
 import { describePriceStatus } from "../utils/price-status";
 import { fanModeLabel, type FanModeOption } from "../utils/device-utils";
 import { tokens, alertStyles } from "../styles/tokens";
@@ -85,6 +92,7 @@ function tsToDatetimeLocal(ts: number): string {
 const SETTINGS: [keyof GlobalSettings, SettingSync][] = [
   ["group_by_floor", plain("groupByFloor", false)],
   ["climate_control_active", plain("climateControlActive", true)],
+  ["target_temp_step", plain("targetTempStep", DEFAULT_TARGET_TEMP_STEP)],
   ["learning_disabled_rooms", plain("learningDisabledRooms", [])],
   ["outdoor_temp_sensor", plain("outdoorTempSensor", "")],
   ["price_entity", plain("priceEntity", "")],
@@ -197,6 +205,7 @@ export class RsSettings extends LitElement {
 
   @state() private _groupByFloor = false;
   @state() private _climateControlActive = true;
+  @state() private _targetTempStep: TargetTempStep = DEFAULT_TARGET_TEMP_STEP;
   @state() private _learningDisabledRooms: string[] = [];
   @state() private _outdoorTempSensor = "";
   @state() private _priceEntity = "";
@@ -321,6 +330,8 @@ export class RsSettings extends LitElement {
       }
     }
     this._stored = settings;
+    // The panel's steppers follow a new step at once, not only with the next rooms/list
+    noteTargetStep(settings.target_temp_step);
   }
 
   private _fields(): FieldValues {
@@ -474,6 +485,7 @@ export class RsSettings extends LitElement {
           .hass=${this.hass}
           .groupByFloor=${this._groupByFloor}
           .climateControlActive=${this._climateControlActive}
+          .targetTempStep=${this._targetTempStep}
           @setting-changed=${this._onSettingChanged}
         ></rs-settings-general>`;
       case "sensors":

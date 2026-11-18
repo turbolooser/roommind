@@ -11,7 +11,13 @@ import { fireSaveStatus } from "../../utils/events";
 import { formatNumber, formatPercent } from "../../utils/format";
 import { blurFocusedIn } from "../../utils/focus";
 import { hideFromTopLayer, positionNear, showInTopLayer } from "../../utils/popover";
-import { formatTempLocale, tempUnit, toDisplay, usesFahrenheit } from "../../utils/temperature";
+import {
+  formatTempLocale,
+  targetStep,
+  tempUnit,
+  toDisplay,
+  usesFahrenheit,
+} from "../../utils/temperature";
 import {
   COVER_CLOSED,
   COVER_OPEN,
@@ -1244,7 +1250,7 @@ export class RsScheduleEditor extends LitElement {
     const l = this.hass.language;
     const names = this._dayNames("long");
     const ref = modeRooms[0];
-    const step = usesFahrenheit(this.hass) ? 1 : 0.5;
+    const step = targetStep(this.hass);
     const defaults = {
       heat: roundToStep(toDisplay(ref?.comfort_heat ?? ref?.comfort_temp ?? 21, this.hass), step),
       cool: roundToStep(toDisplay(ref?.comfort_cool ?? 24, this.hass), step),
