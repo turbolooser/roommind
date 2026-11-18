@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_COMPRESSOR_MIN_RUN_MINUTES,
     DEFAULT_CONFLICT_RESOLUTION,
     DEFAULT_CONTROL_MODE,
+    DEFAULT_TARGET_TEMP_STEP,
     DOMAIN,
     MAX_CO2_THRESHOLD,
     MAX_PRICE_SHIFT_K,
@@ -28,6 +29,7 @@ from .const import (
     MIN_TARGET_TEMP,
     OVERRIDE_CUSTOM,
     OVERRIDE_TYPES,
+    TARGET_TEMP_STEPS,
     VENTILATION_DOMAINS,
     WINDOW_PAUSE_MODES,
     build_override_live,
@@ -268,6 +270,7 @@ _SETTINGS_SAVE_FIELDS = (
     "room_order",
     "group_by_floor",
     "compressor_groups",
+    "target_temp_step",
 )
 
 
@@ -451,6 +454,7 @@ async def websocket_list_rooms(
             ),
             "coil_dry_drain_minutes": settings.get("coil_dry_drain_minutes", DEFAULT_COIL_DRY_DRAIN_MINUTES),
             "compressor_groups": settings.get("compressor_groups", []),
+            "target_temp_step": settings.get("target_temp_step", DEFAULT_TARGET_TEMP_STEP),
         },
     )
 
@@ -954,6 +958,7 @@ async def websocket_get_settings(
         ],
         vol.Optional("room_order"): [str],
         vol.Optional("group_by_floor"): bool,
+        vol.Optional("target_temp_step"): vol.All(vol.Coerce(float), vol.In(TARGET_TEMP_STEPS)),
         vol.Optional("compressor_groups"): [
             {
                 vol.Required("id"): str,

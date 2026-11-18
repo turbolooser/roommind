@@ -2,6 +2,12 @@ import type { HomeAssistant } from "../types";
 import { localize } from "./localize";
 import { serverNow } from "./server-clock";
 
+/** A typed decimal (point or comma, optional sign) as a number; NaN for anything else. */
+export function parseDecimalEntry(text: string): number {
+  const t = text.trim().replace(",", ".");
+  return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(t) ? Number(t) : NaN;
+}
+
 /** Number in the user's language (decimal comma in German). */
 export function formatNumber(
   value: number,

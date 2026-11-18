@@ -12,16 +12,17 @@ import {
   scheduleNextChange,
   setbackHint,
 } from "../utils/room-state";
-import { formatHours, formatMinutes, formatPercent, formatRemaining } from "../utils/format";
-import { modeStyles } from "../styles/shared-mode-styles";
-import { tokens } from "../styles/tokens";
 import {
-  formatTempLocale,
-  tempUnit,
-  toCelsius,
-  toDisplay,
-  usesFahrenheit,
-} from "../utils/temperature";
+  formatHours,
+  formatMinutes,
+  formatNumber,
+  formatPercent,
+  formatRemaining,
+  parseDecimalEntry,
+} from "../utils/format";
+import { modeStyles } from "../styles/shared-mode-styles";
+import { srOnly, tokens } from "../styles/tokens";
+import { formatTempLocale, targetStep, tempUnit, toCelsius, toDisplay } from "../utils/temperature";
 import { MAX_TARGET_TEMP_C, MIN_TARGET_TEMP_C } from "../utils/temperature";
 import { serverNow } from "../utils/server-clock";
 import {
@@ -707,13 +708,24 @@ export class RoomMindRoomCard extends LitElement {
         >
           <ha-icon icon="mdi:minus"></ha-icon>
         </button>
-        <span class="value" aria-live="polite"
+        <label class="value"
           >${
             sideIcon
               ? html`<ha-icon class="side-icon" icon=${sideIcon} aria-hidden="true"></ha-icon>`
               : nothing
-          }${formatTempLocale(valueC, this.hass, 0, 1)}
-          ${tempUnit(this.hass)}</span
+          }<input
+            type="text"
+            inputmode="decimal"
+            enterkeyhint="done"
+            autocomplete="off"
+            aria-label=${`${label} (${tempUnit(this.hass)})`}
+            .value=${this._entryText(valueC)}
+            @focus=${this._selectAll}
+            @blur=${(e: Event) => this._commitEntry(e.target as HTMLInputElement, valueC, onChange)}
+            @keydown=${(e: KeyboardEvent) => this._onEntryKey(e, valueC, onChange)}
+          /><span aria-hidden="true">${tempUnit(this.hass)}</span></label
+        ><span class="sr-only" aria-live="polite" aria-atomic="true"
+          >${this._entryText(valueC)} ${tempUnit(this.hass)}</span
         >
         <button
           class="step"
@@ -727,14 +739,56 @@ export class RoomMindRoomCard extends LitElement {
     `;
   }
 
-  /** One display step (0.5 °C / 1 °F) from the value, snapped to the step grid. */
+  /** One display step (the +/- step setting) from the value, snapped to the step grid. */
   private _step(valueC: number, dir: 1 | -1): number {
-    const step = usesFahrenheit(this.hass) ? 1 : 0.5;
+    const step = targetStep(this.hass);
     const grid = toDisplay(valueC, this.hass) / step;
     // A value off the grid (set elsewhere, unit conversion) moves to the next grid point.
     const index = dir > 0 ? Math.floor(grid + 1e-6) + 1 : Math.ceil(grid - 1e-6) - 1;
-    const next = toCelsius(index * step, this.hass);
+    const next = toCelsius(Number((index * step).toFixed(10)), this.hass);
     return Math.min(MAX_TARGET_TEMP_C, Math.max(MIN_TARGET_TEMP_C, next));
+  }
+
+  // Exact entry as in the panel (#532): tap the value, type 21,7, Enter or leave the field.
+
+  private _entryText(valueC: number): string {
+    return formatNumber(toDisplay(valueC, this.hass), this.hass, 0, 2);
+  }
+
+  private _selectAll(e: FocusEvent): void {
+    const input = e.target as HTMLInputElement;
+    // Safari drops a selection made on focus when the tap ends; select once it has.
+    requestAnimationFrame(() => input.setSelectionRange(0, input.value.length));
+  }
+
+  /** Same limits as the panel's stepper; a mistyped value is rejected, not clamped. */
+  private _commitEntry(
+    input: HTMLInputElement,
+    valueC: number,
+    onChange: (v: number) => void,
+  ): void {
+    const shown = this._entryText(valueC);
+    const value = parseDecimalEntry(input.value);
+    const min = Math.ceil(toDisplay(MIN_TARGET_TEMP_C, this.hass));
+    const max = Math.floor(toDisplay(MAX_TARGET_TEMP_C, this.hass));
+    if (input.value !== shown && Number.isFinite(value) && value >= min && value <= max) {
+      const celsius = toCelsius(value, this.hass);
+      if (celsius !== valueC) onChange(celsius);
+    }
+    input.value = shown;
+  }
+
+  private _onEntryKey(e: KeyboardEvent, valueC: number, onChange: (v: number) => void): void {
+    const input = e.target as HTMLInputElement;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this._commitEntry(input, valueC, onChange);
+      input.blur();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      input.value = this._entryText(valueC);
+      input.select();
+    }
   }
 
   // ---- Actions ----
@@ -909,6 +963,7 @@ export class RoomMindRoomCard extends LitElement {
 
   static styles = [
     tokens,
+    srOnly,
     modeStyles,
     css`
       :host {
@@ -1394,6 +1449,25 @@ export class RoomMindRoomCard extends LitElement {
         font-size: 15px;
         font-variant-numeric: tabular-nums;
         color: var(--primary-text-color);
+      }
+
+      /* 16 px keeps iOS Safari from zooming in on focus. */
+      .value input {
+        width: 4.5ch;
+        min-height: 44px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: inherit;
+        font-family: inherit;
+        font-size: 16px;
+        font-variant-numeric: tabular-nums;
+        text-align: end;
+      }
+
+      .value input:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: -2px;
       }
 
       .switch-icon {

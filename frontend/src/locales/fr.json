@@ -278,6 +278,8 @@
   "covers.orientation_NW_full": "Nord-Ouest",
   "settings.general_title": "Général",
   "settings.group_by_floor": "Regrouper les pièces par étage",
+  "settings.target_temp_step": "Pas des boutons + / −",
+  "settings.target_temp_step_hint": "Pour les températures cibles des pièces, des plannings et de la carte du tableau de bord. Les valeurs saisies restent exactes.",
   "settings.climate_control_active": "Contrôle climatique actif",
   "settings.climate_control_hint": "Désactivé : RoomMind continue de mesurer et d'apprendre, mais n'envoie aucune commande. Les appareils restent tels quels et continuent de se réguler seuls.",
   "settings.learning_title": "Entraînement du modèle",

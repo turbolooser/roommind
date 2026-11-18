@@ -278,6 +278,8 @@
   "covers.orientation_NW_full": "Nord-ovest",
   "settings.general_title": "Generali",
   "settings.group_by_floor": "Raggruppa le stanze per piano",
+  "settings.target_temp_step": "Passo dei pulsanti + / −",
+  "settings.target_temp_step_hint": "Per le temperature obiettivo di stanze, programmi e scheda della dashboard. I valori digitati restano esatti.",
   "settings.climate_control_active": "Controllo climatizzazione attivo",
   "settings.climate_control_hint": "Spento: RoomMind continua a misurare e a imparare, ma non invia comandi. I dispositivi restano come sono e continuano a regolarsi da soli.",
   "settings.learning_title": "Addestramento del modello",

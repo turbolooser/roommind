@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Context
 
 DOMAIN = "roommind"
-VERSION = "2.0.0.5"
+VERSION = "2.0.0.6"
 
 # Platforms
 PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.BINARY_SENSOR, Platform.CLIMATE]
@@ -111,6 +111,11 @@ class TargetTemps(NamedTuple):
 # climate entity in climate.py, which imports these.
 MIN_TARGET_TEMP = 5.0
 MAX_TARGET_TEMP = 35.0
+
+# Fork: step of the +/- buttons on target temperatures (panel, schedules, dashboard card),
+# in °C; the frontend uses 0.2 / 1 / 2 °F for Fahrenheit. Typed values stay exact.
+TARGET_TEMP_STEPS = (0.1, 0.5, 1.0)
+DEFAULT_TARGET_TEMP_STEP = 0.5
 
 # Smart control defaults
 BANGBANG_HEAT_HYSTERESIS = 0.2  # °C below target → start heating (bang-bang fallback)
