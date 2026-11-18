@@ -2,7 +2,8 @@
 import { afterEach, expect, test } from "vitest";
 import { render } from "lit";
 import { tempRow } from "../components/shared/temp-row";
-import { RoomMindRoomCard } from "../card/roommind-room-card";
+import "../card/roommind-room-card";
+import type { RoomMindRoomCard } from "../card/roommind-room-card";
 import { refreshRooms } from "../card/rooms-feed";
 import { roundToStep } from "./schedule-week";
 import { parseDecimalEntry } from "./format";
