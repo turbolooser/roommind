@@ -35,6 +35,7 @@ from .const import (
     DEFAULT_PV_SURPLUS_MIN_W,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
+    DEFAULT_WINDOW_FROST_TEMP,
     DOMAIN,
     VACATION_ACTIONS,
 )
@@ -82,6 +83,7 @@ class RoomMindOptionsFlow(OptionsFlow):
                         "vacation_frost_temp": user_input["vacation_frost_temp"],
                         "idle_off_after_minutes": user_input["idle_off_after_minutes"],
                         "idle_setback_offset": user_input["idle_setback_offset"],
+                        "window_frost_temp": user_input["window_frost_temp"],
                         "demand_control_enabled": user_input["demand_control_enabled"],
                         "demand_select_entities": user_input["demand_select_entities"],
                         "demand_min": user_input["demand_min"],
@@ -110,6 +112,7 @@ class RoomMindOptionsFlow(OptionsFlow):
         current_frost = settings.get("vacation_frost_temp", DEFAULT_VACATION_FROST_TEMP)
         current_idle_off = settings.get("idle_off_after_minutes", DEFAULT_IDLE_OFF_AFTER_MINUTES)
         current_setback_offset = settings.get("idle_setback_offset", DEFAULT_IDLE_SETBACK_OFFSET)
+        current_window_frost = settings.get("window_frost_temp", DEFAULT_WINDOW_FROST_TEMP)
         current_demand_enabled = settings.get("demand_control_enabled", DEFAULT_DEMAND_CONTROL_ENABLED)
         current_demand_selects = settings.get("demand_select_entities", [])
         current_demand_min = settings.get("demand_min", DEFAULT_DEMAND_MIN)
@@ -173,6 +176,15 @@ class RoomMindOptionsFlow(OptionsFlow):
                     selector.NumberSelectorConfig(
                         min=0.5,
                         max=10.0,
+                        step=0.5,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required("window_frost_temp", default=current_window_frost): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=15.0,
                         step=0.5,
                         unit_of_measurement="°C",
                         mode=selector.NumberSelectorMode.BOX,

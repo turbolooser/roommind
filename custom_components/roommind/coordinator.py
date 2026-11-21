@@ -50,6 +50,7 @@ from .const import (
     DEFAULT_PV_SURPLUS_MIN_W,
     DEFAULT_VACATION_ACTION,
     DEFAULT_VACATION_FROST_TEMP,
+    DEFAULT_WINDOW_FROST_TEMP,
     DEMAND_DOWN_SETTLED_DELTA,
     DOMAIN,
     HEATING_BOOST_TARGET,
@@ -278,6 +279,16 @@ def _orchestrated_training_power(heat_source_plan: HeatSourcePlan) -> float:
     """
     active = [c.power_fraction for c in heat_source_plan.commands if c.active]
     return sum(active) / len(active) if active else 0.0
+
+
+def _window_frost_temp(settings: dict) -> float | None:
+    """Frost floor (°C) for heating setbacks during a window pause; None when disabled (0)."""
+    value = settings.get("window_frost_temp", DEFAULT_WINDOW_FROST_TEMP)
+    try:
+        temp = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_WINDOW_FROST_TEMP
+    return temp if temp > 0 else None
 
 
 def _window_pause_applies(room: dict, mode: str) -> bool:
@@ -1621,6 +1632,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
                     compressor_conflicting_modes=compressor_conflicting_modes or None,
                     compressor_group_modes=compressor_group_modes or None,
                     force_off=force_off,
+                    window_frost_temp=_window_frost_temp(settings) if window_open else None,
                 )
             except Exception:  # noqa: BLE001
                 _LOGGER.warning(

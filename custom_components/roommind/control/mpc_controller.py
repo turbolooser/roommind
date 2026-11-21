@@ -763,6 +763,7 @@ async def async_idle_device(
     use_setpoint_offset: bool = True,
     release_setback: frozenset[str] = frozenset(),
     head_offset: float = 0.0,
+    frost_temp: float | None = None,
 ) -> bool:
     """Idle a climate device per its configured idle_action.
 
@@ -786,6 +787,11 @@ async def async_idle_device(
     whose sensor reads the warm layer under the ceiling does not restart while
     the room is still inside the setback.
 
+    ``frost_temp`` (°C, fork) is set while an open window pauses the room: a
+    heating setback goes down to it instead of target - offset, and so does the
+    fallback setpoint of a device without an off mode. It never raises a lower
+    setback. None keeps the plain setback.
+
     ``force_off`` marks an explicit user request to shut the room down
     (schedule_off_action / presence_away_action = "off").  It outranks the
     per-device idle_action, which only expresses "no heat/cool demand right
@@ -808,7 +814,10 @@ async def async_idle_device(
     # is not effective (e.g. Wavin Sentio with min_temp=0 or high min_temp).
     fallback_temp: float | None = None
     if targets is not None and targets.heat is not None:
-        fallback_temp = celsius_to_ha_temp(hass, targets.heat - setback_offset)
+        fallback_c = targets.heat - setback_offset
+        if frost_temp is not None:
+            fallback_c = min(fallback_c, frost_temp)
+        fallback_temp = celsius_to_ha_temp(hass, fallback_c)
 
     # --- LOW branch ---
     # Some TRVs (e.g. battery Zigbee valves) enter deep-sleep hibernation after
@@ -874,6 +883,8 @@ async def async_idle_device(
         # Compute setback temperature
         if current_hvac == "heat" and targets.heat is not None:
             setback_temp = targets.heat + sensor_offset + head_offset - setback_offset
+            if frost_temp is not None:
+                setback_temp = min(setback_temp, frost_temp)
         elif current_hvac == "cool" and targets.cool is not None:
             setback_temp = targets.cool + sensor_offset + head_offset + setback_offset
         else:
@@ -1734,6 +1745,7 @@ class MPCController:
         self.valve_feedback: tuple[float, float] | None = None
         self._idle_targets: TargetTemps | None = None
         self._force_off = False
+        self._window_frost_temp: float | None = None
         # Strictest heat / cool target within the MPC guard window (set by _evaluate_mpc)
         self._lead_heat: float | None = None
         self._lead_cool: float | None = None
@@ -2500,6 +2512,7 @@ class MPCController:
         compressor_conflicting_modes: dict[str, frozenset[str]] | None = None,
         compressor_group_modes: dict[str, str] | None = None,
         force_off: bool = False,
+        window_frost_temp: float | None = None,
     ) -> None:
         """Apply the determined mode with proportional valve control.
 
@@ -2513,6 +2526,9 @@ class MPCController:
         ends in off, else the unit keeps the whole group from switching (#533).
         ``compressor_group_modes`` gives a Managed auto room's units the group's mode
         instead of heat_cool (#533).
+
+        ``window_frost_temp`` (fork) is the frost floor for heating setbacks while an
+        open window pauses the room; None outside a window pause.
         """
         _forced_on = compressor_forced_on or set()
         _forced_off = compressor_forced_off or set()
@@ -2530,6 +2546,7 @@ class MPCController:
         # after backward-compat conversion so legacy callers get a TargetTemps.
         self._idle_targets = targets
         self._force_off = force_off
+        self._window_frost_temp = window_frost_temp
         self._conflicting_modes = compressor_conflicting_modes or {}
         _group_modes = compressor_group_modes or {}
         self.setback_eids = []
@@ -2612,6 +2629,7 @@ class MPCController:
                         targets=targets,
                         use_setpoint_offset=self.has_external_sensor,
                         head_offset=self._head_offset(eid, "idle"),
+                        frost_temp=self._window_frost_temp,
                         release_setback=self._group_conflicts(eid),
                     )
                     continue
@@ -2639,6 +2657,7 @@ class MPCController:
                         targets=targets,
                         use_setpoint_offset=self.has_external_sensor,
                         head_offset=self._head_offset(eid, "idle"),
+                        frost_temp=self._window_frost_temp,
                         release_setback=self._group_conflicts(eid),
                     )
                     continue
@@ -2882,6 +2901,7 @@ class MPCController:
                         targets=targets,
                         use_setpoint_offset=self.has_external_sensor,
                         head_offset=self._head_offset(eid, "idle"),
+                        frost_temp=self._window_frost_temp,
                         release_setback=self._group_conflicts(eid),
                     )
                     await self._async_release_valve(eid)
@@ -2933,6 +2953,7 @@ class MPCController:
                         targets=targets,
                         use_setpoint_offset=self.has_external_sensor,
                         head_offset=self._head_offset(eid, "idle"),
+                        frost_temp=self._window_frost_temp,
                         release_setback=self._group_conflicts(eid),
                     )
                     continue
@@ -2989,6 +3010,7 @@ class MPCController:
                         targets=targets,
                         use_setpoint_offset=self.has_external_sensor,
                         head_offset=self._head_offset(eid, "idle"),
+                        frost_temp=self._window_frost_temp,
                         release_setback=self._group_conflicts(eid),
                     )
                     continue
@@ -3017,6 +3039,7 @@ class MPCController:
                         targets=targets,
                         use_setpoint_offset=self.has_external_sensor,
                         head_offset=self._head_offset(eid, "idle"),
+                        frost_temp=self._window_frost_temp,
                         release_setback=self._group_conflicts(eid),
                     )
                     await self._async_release_valve(eid)
@@ -3049,6 +3072,7 @@ class MPCController:
                     targets=targets,
                     use_setpoint_offset=self.has_external_sensor,
                     head_offset=self._head_offset(eid, "idle"),
+                    frost_temp=self._window_frost_temp,
                     force_off=force_off,
                     release_setback=self._release_setback_for(eid, sitting_out),
                 ):
@@ -3101,6 +3125,7 @@ class MPCController:
             targets=targets,
             use_setpoint_offset=self.has_external_sensor,
             head_offset=self._head_offset(eid, "idle"),
+            frost_temp=self._window_frost_temp,
             force_off=self._force_off,
             release_setback=_SETBACK_RELEASE_ALL | self._group_conflicts(eid),
         )
@@ -3555,6 +3580,7 @@ class MPCController:
                 targets=self._idle_targets,
                 use_setpoint_offset=self.has_external_sensor,
                 head_offset=self._head_offset(eid, "idle"),
+                frost_temp=self._window_frost_temp,
                 force_off=self._force_off,
                 release_setback=self._group_conflicts(eid),
             )

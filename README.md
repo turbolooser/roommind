@@ -20,7 +20,7 @@ This fork only adds a layer of tuning on top, specifically for running several A
 
 **→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
-**Upstream base of this release:** fork `2.0.1.1` is built on upstream **`v2.0.1`** (commit [`9655b4a`](https://github.com/snazzybean/roommind/commit/9655b4a2)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
+**Upstream base of this release:** fork `2.0.1.2` is built on upstream **`v2.0.1`** (commit [`9655b4a`](https://github.com/snazzybean/roommind/commit/9655b4a2)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
 
 ---
 
@@ -94,6 +94,8 @@ Vacation can **turn heating off while cooling continues** — for a summer trip 
 `Window pauses control`, next to the window sensors, decides *when* an open window stops the room: `Always` (the default, upstream behaviour), `Only when heating`, or `Only when cooling`. Upstream always pauses, which is right in winter and wrong for a room cooled with the terrace door deliberately open — there the only workaround was removing the sensors entirely, losing the pause for the heating season too.
 
 Only the *control* pause is conditional. Model learning stays frozen whenever a window is physically open, in every mode: an open window skews the room's heat balance either way, and training on that data would corrupt the thermal model. The open/close delays are untouched — they decide when a window counts as open, this decides what happens once it does. An unrecognised value falls back to `Always`.
+
+**Frost floor while the window is open** (since 2.0.1.2): during a window pause a heating device in setback goes down to `Window open: frost protection` (options dialog, default `7 °C`) instead of target − setback offset. With the plain setback a room that cools below it made the TRV open its valve again with the window still open. The floor never raises a lower setback, is clamped to the device's `min_temp`, leaves cooling untouched, and ends with the pause: once the window counts as closed, normal control resumes in the same cycle. `0` keeps the plain setback.
 
 ### 12. Learned valve lead for direct valve control
 Rooms whose TRV valve RoomMind drives directly (opening/closing degree entities, upstream #413) no longer hold the valve by the room reading alone. A radiator answers a valve move only after a dead time plus a lag, which a first-order room model cannot represent: one radiator room swung 17.5–19.3 °C at an 18 °C target every ~1.5 h, overshooting by up to 1.3 K, because the valve opened while the room still had ~9 min of falling ahead and stayed wide open until the reading reached the target, after which the room kept rising for another 7–15 min.
