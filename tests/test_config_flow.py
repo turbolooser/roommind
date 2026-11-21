@@ -66,6 +66,7 @@ class TestOptionsFlow:
 
         assert result["type"] == "form"
         assert result["step_id"] == "init"
+        assert "window_frost_temp" in result["data_schema"].schema
 
     @pytest.mark.asyncio
     async def test_init_uses_defaults_when_store_missing(self, hass):
@@ -93,6 +94,7 @@ class TestOptionsFlow:
             "vacation_frost_temp": 8.0,
             "idle_off_after_minutes": 30,
             "idle_setback_offset": 2.0,
+            "window_frost_temp": 7.5,
             "ac_setpoint_strategy": "offset",
             "ac_cool_offset_max": 2.5,
             "ac_heat_offset_max": 1.5,
@@ -131,6 +133,7 @@ class TestOptionsFlow:
                 "vacation_frost_temp": 7.0,
                 "idle_off_after_minutes": 0,
                 "idle_setback_offset": 3.0,
+                "window_frost_temp": 0.0,
                 "ac_setpoint_strategy": "boost",
                 "ac_cool_offset_max": 2.0,
                 "ac_heat_offset_max": 2.0,

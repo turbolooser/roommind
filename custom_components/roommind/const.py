@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Context
 
 DOMAIN = "roommind"
-VERSION = "2.0.1.1"
+VERSION = "2.0.1.2"
 
 # Platforms
 PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.BINARY_SENSOR, Platform.CLIMATE]
@@ -479,6 +479,11 @@ VACATION_ACTION_OFF = "off"
 VACATION_ACTIONS = (VACATION_ACTION_SETBACK, VACATION_ACTION_OFF)
 DEFAULT_VACATION_ACTION = VACATION_ACTION_SETBACK
 DEFAULT_VACATION_FROST_TEMP = 7.0
+
+# Fork: while a window pause holds a room, a heating device in setback is set to
+# this floor instead of target - setback_offset, so a cooling room does not make
+# the TRV open again with the window still open. 0 keeps the plain setback.
+DEFAULT_WINDOW_FROST_TEMP = 7.0
 
 
 def is_override_active(room: dict) -> bool:

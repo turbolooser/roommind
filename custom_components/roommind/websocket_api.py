@@ -233,6 +233,7 @@ _SETTINGS_SAVE_FIELDS = (
     "vacation_frost_temp",
     "idle_off_after_minutes",
     "idle_setback_offset",
+    "window_frost_temp",
     "demand_control_enabled",
     "demand_select_entities",
     "demand_min",
