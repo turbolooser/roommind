@@ -51,6 +51,7 @@ from ..const import (
     PROPORTIONAL_SETPOINT_DWELL_SECONDS,
     PROPORTIONAL_SETPOINT_REPORT_SECONDS,
     PROPORTIONAL_SETPOINT_REPORT_TOLERANCE,
+    VALVE_FLAT_STEP,
     VALVE_LOOP_GAIN,
     VALVE_OVERSHOOT_STOP_K,
     VALVE_PROPORTIONAL_BAND_K,
@@ -1258,6 +1259,11 @@ def valve_demand(
     q_occupancy: float,
     lead_minutes: float = 0.0,
     trim: float = 0.0,
+    reading: float | None = None,
+    trend: float | None = None,
+    open_minutes: float | None = None,
+    opening: float | None = None,
+    stepped: bool = False,
 ) -> float:
     """Valve opening (0-1) for a room with direct valve control (#413), 0.0 without demand.
 
@@ -1270,11 +1276,26 @@ def valve_demand(
     the learned correction of the holding share (``ValveLeadTracker``): a first-order
     model has no state for the heat still in the radiator, so the reading alone kept
     the valve open until the target and the room overshot by up to 1.3 K.
+
+    Lead and trim only throttle a room that is warming. Below the target with a flat or
+    falling *trend* (K/min), once the valve has held its *opening* for the learned lead
+    (*open_minutes* >= *lead_minutes*: the dead time is over and the room did not answer),
+    it opens ``VALVE_FLAT_STEP`` further and keeps that step (*stepped*) through the next
+    lead, step by step up to 100 % (Thomas 24.11.2026 02:35: "bei 93 und keinem Trend, dass
+    die Temperatur nach oben geht, braucht es keinen Vorhalt, sondern die komplette
+    Leistung"; Veranda 17.1 at 17.5 held 93 %). A jump to 100 % overshot the Veranda
+    simulation by 0.5-0.7 K, and so did holding the opening of the first dead time: then the
+    trend still shows the radiator, not the room (Freigabe 24.11. 09:30).
     """
     if model.Q_heat <= 0:
         return 0.0
     hold = valve_holding_share(model, outdoor_temp, target, q_solar=q_solar, q_occupancy=q_occupancy)
     pf = hold + trim + (target - current_temp) / valve_band(model, lead_minutes)
+    if reading is not None and trend is not None and opening is not None and trend <= 0.0 and reading < target:
+        if open_minutes is not None and open_minutes >= lead_minutes:
+            pf = max(pf, opening + VALVE_FLAT_STEP)
+        elif stepped:
+            pf = max(pf, opening)
     return min(1.0, pf) if pf > 0.0 else 0.0
 
 
@@ -2166,7 +2187,9 @@ class MPCController:
                 continuation_power=partial(self._gentle_power, optimizer, current_temp, outdoor_now),
                 area_id=self._area_id,
                 valve_demand=(
-                    partial(self._valve_demand, model, lead_temp, outdoor_now) if self._valve_modulating else None
+                    partial(self._valve_demand, model, lead_temp, outdoor_now, reading=current_temp)
+                    if self._valve_modulating
+                    else None
                 ),
                 valve_lead_temp=None if lead is None else lead_temp,
                 valve_min=self._valve_min,
@@ -2260,7 +2283,9 @@ class MPCController:
             rebound_charge=self.q_rebound,
         )
 
-    def _valve_demand(self, model: Any, current_temp: float, outdoor_temp: float, target: float) -> float:
+    def _valve_demand(
+        self, model: Any, current_temp: float, outdoor_temp: float, target: float, *, reading: float | None = None
+    ) -> float:
         return valve_demand(
             model,
             current_temp,
@@ -2270,6 +2295,11 @@ class MPCController:
             q_occupancy=self.q_occupancy,
             lead_minutes=0.0 if self._valve_lead is None else self._valve_lead.minutes,
             trim=0.0 if self._valve_lead is None else self._valve_lead.trim,
+            reading=None if self._valve_lead is None else reading,
+            trend=None if self._valve_lead is None else self._valve_lead.trend,
+            open_minutes=None if self._valve_lead is None else self._valve_lead.open_minutes,
+            opening=None if self._valve_lead is None else self._valve_lead.opening,
+            stepped=False if self._valve_lead is None else self._valve_lead.stepped,
         )
 
     def _evaluate_bangbang(

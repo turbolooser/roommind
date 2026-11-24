@@ -1227,7 +1227,7 @@ class RoomMindCoordinator(DataUpdateCoordinator):
             head_offsets=self._head_offsets,
             price_level=self._price_level_for(room),
             planning_temp=planning_temp,
-            valve_lead=self._valve_lead_tracker.get(area_id),
+            valve_lead=self._valve_lead_tracker.get(area_id, time.time()),
         )
         mode, power_fraction = await controller.async_evaluate(current_temp, targets)
         if radiator:
@@ -1730,7 +1730,14 @@ class RoomMindCoordinator(DataUpdateCoordinator):
         if controller.valve_feedback is not None and current_temp is not None:
             band, raw_demand = controller.valve_feedback
             self._valve_lead_tracker.update(
-                area_id, time.time(), current_temp, mode, targets.heat, band=band, raw_demand=raw_demand
+                area_id,
+                time.time(),
+                current_temp,
+                mode,
+                targets.heat,
+                band=band,
+                raw_demand=raw_demand,
+                opening=power_fraction if mode == MODE_HEATING else None,
             )
 
         self._record_decision(

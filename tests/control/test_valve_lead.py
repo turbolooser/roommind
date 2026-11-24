@@ -65,8 +65,11 @@ class _Veranda:
         self.air += self.GAIN * self.heat - self.LOSS * (self.air - self.WALLS)
 
 
-def _run(hours: float, *, lead: bool, start: float = 18.4) -> list[float]:
-    """Closed loop through decide_mpc_action; returns the room temperature per 30 s."""
+def _run(hours: float, *, lead: bool, start: float = 18.4, full_below: bool = True) -> list[float]:
+    """Closed loop through decide_mpc_action; returns the room temperature per 30 s.
+
+    full_below passes the reading, trend and opening like the controller does (below the target on a
+    flat or falling trend the valve opens a step per lead, 24.11.2026); False is the throttle before that."""
     room = _Veranda(start)
     tracker = ValveLeadTracker()
     mode = MODE_IDLE
@@ -77,7 +80,7 @@ def _run(hours: float, *, lead: bool, start: float = 18.4) -> list[float]:
         now = k * 30.0
         if k % 10 == 0:
             reading = round(room.air, 2)
-        info = tracker.get("veranda") if lead else None
+        info = tracker.get("veranda", now) if lead else None
         lead_temp = reading if info is None else valve_lead_temp(reading, info.trend, info.minutes)
         mode, power = decide_mpc_action(
             # The optimizer's closed form: full power below the target, nothing above
@@ -105,6 +108,11 @@ def _run(hours: float, *, lead: bool, start: float = 18.4) -> list[float]:
                 q_occupancy=0.0,
                 lead_minutes=0.0 if info is None else info.minutes,
                 trim=0.0 if info is None else info.trim,
+                reading=reading if info is not None and full_below else None,
+                trend=info.trend if info is not None and full_below else None,
+                open_minutes=info.open_minutes if info is not None and full_below else None,
+                opening=info.opening if info is not None and full_below else None,
+                stepped=info.stepped if info is not None and full_below else False,
             ),
             valve_lead_temp=None if info is None else lead_temp,
         )
@@ -112,7 +120,16 @@ def _run(hours: float, *, lead: bool, start: float = 18.4) -> list[float]:
             band = valve_band(VERANDA_MODEL, info.minutes)
             hold = valve_holding_share(VERANDA_MODEL, OUTDOOR, TARGET, q_solar=0.0, q_occupancy=0.0)
             raw = hold + info.trim + (TARGET - lead_temp) / band
-            tracker.update("veranda", now, reading, mode, TARGET, band=band, raw_demand=raw)
+            tracker.update(
+                "veranda",
+                now,
+                reading,
+                mode,
+                TARGET,
+                band=band,
+                raw_demand=raw,
+                opening=power if mode == MODE_HEATING else None,
+            )
         # async_set_valve: dwell and deadband while running, released when idle
         if mode == MODE_IDLE:
             held = None
@@ -131,9 +148,10 @@ def test_reading_driven_valve_swings_like_the_veranda():
     assert max(temps) - min(temps) > 1.0
 
 
+@pytest.mark.parametrize("full_below", [True, False])
 @pytest.mark.parametrize("start", [18.4, 17.5])
-def test_lead_and_trim_hold_the_veranda_within_the_band(start):
-    temps = _run(24, lead=True, start=start)[6 * 120 :]
+def test_lead_and_trim_hold_the_veranda_within_the_band(start, full_below):
+    temps = _run(24, lead=True, start=start, full_below=full_below)[6 * 120 :]
     assert max(temps) - TARGET <= 0.3
     assert max(temps) - min(temps) <= 0.6
 
@@ -358,3 +376,145 @@ def test_tracker_prunes_removed_rooms():
     tracker.prune({"a"})
     tracker.remove_room("unknown")
     assert tracker.dirty is False
+
+
+# Veranda 24.11.2026 02:03-02:31 (diagnostics/get): 17.1 at a target of 17.5, lead 17 min, trim -0.10, the valve
+# held 93 % while the room did not warm. Thomas 02:35/02:43: below the target without a rising trend -> more power,
+# but only once the valve has held its opening longer than the learned dead time (before that the trend shows the
+# radiator). Freigabe 09:30: step by step (+10 % per lead), a jump to 100 % overshot the simulation by 0.5-0.7 K.
+VERANDA_2411 = RCModel(C=1.0, U=0.0558, Q_heat=1.392, Q_solar=0.0, Q_occupancy=0.0)
+LEAD_2411 = 17.17
+
+
+def _demand_2411(
+    reading: float,
+    trend: float,
+    open_minutes: float | None = 30.0,
+    trim: float = -0.101,
+    opening: float | None = 0.8,
+    stepped: bool = False,
+) -> float:
+    lead = valve_lead_temp(reading, trend, LEAD_2411)
+    return valve_demand(
+        VERANDA_2411,
+        lead,
+        -2.38,
+        17.5,
+        q_solar=0.0,
+        q_occupancy=0.0,
+        lead_minutes=LEAD_2411,
+        trim=trim,
+        reading=reading,
+        trend=trend,
+        open_minutes=open_minutes,
+        opening=opening,
+        stepped=stepped,
+    )
+
+
+def _throttle_2411(reading: float, trend: float, trim: float = -0.101) -> float:
+    lead = valve_lead_temp(reading, trend, LEAD_2411)
+    hold = valve_holding_share(VERANDA_2411, -2.38, 17.5, q_solar=0.0, q_occupancy=0.0)
+    return min(1.0, hold + trim + (17.5 - lead) / valve_band(VERANDA_2411, LEAD_2411))
+
+
+@pytest.mark.parametrize("trend", [0.0, -0.005, -0.05])
+@pytest.mark.parametrize("reading", [17.1, 17.3, 17.45])
+def test_past_the_dead_time_below_target_without_rising_trend_opens_one_step(reading, trend):
+    assert _demand_2411(reading, trend, opening=0.8) == pytest.approx(
+        max(0.9, min(1.0, _throttle_2411(reading, trend)))
+    )
+    assert _demand_2411(reading, trend, opening=0.93) == 1.0
+
+
+def test_flat_trend_within_the_dead_time_keeps_the_throttle_unless_it_stepped():
+    """The radiator has not answered yet: the trend is the dead time, not the room."""
+    assert _demand_2411(17.3, 0.0, open_minutes=5.0) == pytest.approx(_throttle_2411(17.3, 0.0))
+    assert _demand_2411(17.3, 0.0, open_minutes=5.0, opening=0.99) < 0.99
+    # a step the rule made is kept through the next lead instead of falling back to the throttle
+    assert _demand_2411(17.3, 0.0, open_minutes=5.0, opening=0.99, stepped=True) == pytest.approx(0.99)
+    assert _demand_2411(17.3, 0.0, open_minutes=LEAD_2411, opening=0.8) == pytest.approx(0.9)
+
+
+def test_flat_veranda_reaches_full_opening_within_three_leads():
+    """Closed loop through the tracker: 17.1 flat at 17.5, the throttle at ~0.8 (trim -0.4) like the night."""
+    tracker = ValveLeadTracker()
+    tracker.load_state({"veranda": {"lead": LEAD_2411, "trim": 0.0}})
+    openings = []
+    for k in range(int(4 * LEAD_2411 * 2)):  # 30-s cycles
+        now = k * 30.0
+        info = tracker.get("veranda", now)
+        lead = valve_lead_temp(17.1, info.trend, info.minutes)
+        power = valve_demand(
+            VERANDA_2411,
+            lead,
+            -2.38,
+            17.5,
+            q_solar=0.0,
+            q_occupancy=0.0,
+            lead_minutes=info.minutes,
+            trim=-0.4,
+            reading=17.1,
+            trend=info.trend,
+            open_minutes=info.open_minutes,
+            opening=info.opening,
+            stepped=info.stepped,
+        )
+        tracker.update("veranda", now, 17.1, MODE_HEATING, 17.5, band=1.0, raw_demand=power, opening=power)
+        openings.append(power)
+    assert openings[0] < 0.85  # the throttle the room started with
+    assert openings == sorted(openings)  # never back to the throttle in between
+    assert openings[-1] == 1.0
+    first_full = openings.index(1.0) * 0.5
+    assert 2 * LEAD_2411 <= first_full <= 3 * LEAD_2411 + 1.0  # three steps, one per lead (cycle rounding)
+
+
+def test_rising_trend_below_target_keeps_the_lead_throttle():
+    """Warming towards the target: lead and trim still throttle (the overshoot fix stays)."""
+    assert _demand_2411(17.25, 0.008) == pytest.approx(_throttle_2411(17.25, 0.008))
+    assert _demand_2411(17.25, 0.008) < 1.0
+
+
+def test_at_or_above_target_flat_trend_is_not_forced_open():
+    assert _demand_2411(17.5, 0.0) < 1.0
+    assert _demand_2411(17.8, -0.01) == pytest.approx(max(0.0, _throttle_2411(17.8, -0.01)))
+
+
+def test_valve_not_heating_or_unknown_keeps_the_old_rule():
+    assert _demand_2411(17.3, 0.0, open_minutes=None) == pytest.approx(_throttle_2411(17.3, 0.0))
+    assert _demand_2411(17.3, 0.0, opening=None) == pytest.approx(_throttle_2411(17.3, 0.0))
+    lead = valve_lead_temp(17.3, 0.0, LEAD_2411)
+    plain = valve_demand(
+        VERANDA_2411, lead, -2.38, 17.5, q_solar=0.0, q_occupancy=0.0, lead_minutes=LEAD_2411, trim=-0.101
+    )
+    assert plain == pytest.approx(_throttle_2411(17.3, 0.0))
+
+
+def test_tracker_counts_minutes_since_the_valve_opened():
+    tracker = ValveLeadTracker()
+    tracker.update("r", 0.0, 17.0, MODE_IDLE, 17.5, band=1.0, raw_demand=0.0)
+    assert tracker.get("r", 60.0).open_minutes is None
+    tracker.update("r", 60.0, 17.0, MODE_HEATING, 17.5, band=1.0, raw_demand=0.5)
+    tracker.update("r", 600.0, 17.0, MODE_HEATING, 17.5, band=1.0, raw_demand=0.5)
+    assert tracker.get("r", 960.0).open_minutes == pytest.approx(15.0)
+    assert tracker.get("r").open_minutes is None
+    tracker.update(
+        "r", 960.0, 17.0, MODE_HEATING, 17.5, band=1.0, raw_demand=0.4, opening=0.4
+    )  # closes a bit: clock runs
+    assert tracker.get("r", 1020.0).open_minutes == pytest.approx(16.0)
+    tracker.update(
+        "r", 1020.0, 17.0, MODE_HEATING, 17.5, band=1.0, raw_demand=0.4, opening=1.0
+    )  # opens further: restart
+    assert tracker.get("r", 1080.0).open_minutes == pytest.approx(1.0)
+    assert tracker.get("r", 1080.0).opening == pytest.approx(1.0)
+    assert tracker.get("r", 1080.0).stepped is True  # 16 min held >= the default lead of 15
+    tracker.update("r", 1100.0, 17.6, MODE_IDLE, 17.5, band=1.0, raw_demand=0.0)
+    assert tracker.get("r", 1160.0).open_minutes is None
+    assert tracker.get("r", 1160.0).opening is None and tracker.get("r", 1160.0).stepped is False
+
+
+def test_tracker_marks_an_early_opening_as_not_stepped():
+    tracker = ValveLeadTracker()
+    tracker.update("r", 0.0, 17.0, MODE_HEATING, 17.5, band=1.0, raw_demand=0.5, opening=0.5)
+    tracker.update("r", 300.0, 17.0, MODE_HEATING, 17.5, band=1.0, raw_demand=0.6, opening=0.6)  # 5 min < lead
+    assert tracker.get("r", 360.0).stepped is False

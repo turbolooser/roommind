@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Context
 
 DOMAIN = "roommind"
-VERSION = "2.0.1.2"
+VERSION = "2.0.1.3"
 
 # Platforms
 PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.BINARY_SENSOR, Platform.CLIMATE]
@@ -151,6 +151,7 @@ VALVE_DWELL_SECONDS = 600  # Minimum time a valve position stays before a small 
 VALVE_DEADBAND_PCT = 5  # Smaller position changes are not sent
 VALVE_OVERSHOOT_STOP_K = 0.5  # A modulating valve closes this far above the target whatever the model says
 VALVE_PROPORTIONAL_BAND_K = 1.0  # A modulating valve opens 100 % further per this many K below the target
+VALVE_FLAT_STEP = 0.10  # Below the target without a rising trend: the valve opens this much further per lead
 # Lead of a modulating valve: radiator and air answer a valve move only after a dead
 # time plus a lag, so a valve driven by the room reading alone swings (+1.3 K, 1.5 h)
 VALVE_DEFAULT_LEAD_MINUTES = 15.0  # Dead time + lag until a learned one exists
