@@ -20,7 +20,7 @@ This fork only adds a layer of tuning on top, specifically for running several A
 
 **→ Full feature documentation, screenshots and how-it-works: see the [upstream README](https://github.com/snazzybean/roommind#readme).**
 
-**Upstream base of this release:** fork `2.0.1.2` is built on upstream **`v2.0.1`** (commit [`9655b4a`](https://github.com/snazzybean/roommind/commit/9655b4a2)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
+**Upstream base of this release:** fork `2.0.1.3` is built on upstream **`v2.0.1`** (commit [`9655b4a`](https://github.com/snazzybean/roommind/commit/9655b4a2)). Since 1.8.3 the fork version no longer encodes the upstream version — it had to rise above older fork tags — so the base is named here and in every release note.
 
 ---
 
@@ -104,6 +104,8 @@ The fork adds a **learned lead** per room, with nothing to configure:
 
 - **Lead time** — learned from the turning points: how long the room keeps falling after the valve opens and keeps rising after it closes (start 15 min, limits 5–45 min). The valve is driven by the reading expected one lead ahead (current reading plus its 15-min trend), so it closes early while the room rises and opens early while it falls.
 - **Holding trim** — an integral correction of the model's holding power: a room that ends above its target gets less heat next time, one below gets more. It does not integrate into a fully open or shut valve, and not while the room sits far above its target (sun).
+- **More opening when the room does not answer** (since 2.0.1.3) — below the target with a flat or falling trend, once the valve has held its opening for one lead the radiator's dead time is over and the throttle is not needed: the valve opens 10 % further, keeps that step through the next lead, and repeats up to 100 %. A rising trend keeps the lead throttle. A jump straight to 100 % overshot the closed-loop test by 0.5–0.7 K; the steps stay within +0.25 K.
+
 - **Band from the learned heating power** — the proportional band widens with `Q_heat × lead`, so a strong radiator in a small room opens gently, while a radiator that barely keeps up keeps the upstream 1 K band.
 
 Lead, trim and the number of turning points are **saved with the thermal data** (every ~15 min) and survive restarts. They are relearned after a thermal reset, or when three turning points in a row miss the learned lead by more than half on the same side (radiator, sensor or room changed). The live values are in the diagnostics under `valve_lead`. In a closed-loop test fitted to that room, the reading-driven valve overshot by 0.7 K with a 1.2 K span; with the lead it stays within +0.1 K and a 0.2 K span. Setpoint TRVs and AC heating are unchanged.

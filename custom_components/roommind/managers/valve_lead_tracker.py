@@ -8,6 +8,7 @@ from typing import NamedTuple
 from ..const import (
     MODE_HEATING,
     MODE_IDLE,
+    VALVE_DEADBAND_PCT,
     VALVE_DEFAULT_LEAD_MINUTES,
     VALVE_INTEGRAL_LEADS,
     VALVE_LEAD_LEARN_RATE,
@@ -31,6 +32,9 @@ class ValveLead(NamedTuple):
     minutes: float  # dead time + lag of radiator and air
     trend: float  # K/min of the room reading over the trend window
     trim: float  # learned correction of the model's holding share
+    open_minutes: float | None = None  # minutes since the valve last opened further, None while it does not heat
+    opening: float | None = None  # opening (0-1) the valve holds while heating, None while it does not heat
+    stepped: bool = False  # that opening came after a full lead without a further opening (the room did not answer)
 
 
 class _Turn(NamedTuple):
@@ -68,10 +72,15 @@ class ValveLeadTracker:
         self._turn: dict[str, _Turn] = {}
         self._mode: dict[str, str] = {}
         self._at: dict[str, float] = {}
+        self._heat_since: dict[str, float] = {}
+        self._heat_level: dict[str, float] = {}
+        self._stepped: dict[str, bool] = {}
         self._saved_trim: dict[str, float] = {}
         self.dirty = False
 
-    def get(self, area_id: str) -> ValveLead:
+    def get(self, area_id: str, now: float | None = None) -> ValveLead:
+        """*now* (s) gives ``open_minutes``: how long the valve has held or lowered its opening since it last
+        opened further (by at least ``VALVE_DEADBAND_PCT``) — the reading shows that opening only after the lead."""
         samples = self._samples.get(area_id, [])
         trend = 0.0
         if len(samples) >= 2 and samples[-1][0] - samples[0][0] >= VALVE_TREND_WINDOW_MINUTES * 60 * 2 / 3:
@@ -80,6 +89,9 @@ class ValveLeadTracker:
             self._lead.get(area_id, VALVE_DEFAULT_LEAD_MINUTES),
             trend,
             self._trim.get(area_id, 0.0),
+            None if now is None or area_id not in self._heat_since else (now - self._heat_since[area_id]) / 60,
+            self._heat_level.get(area_id),
+            self._stepped.get(area_id, False),
         )
 
     def update(
@@ -92,14 +104,17 @@ class ValveLeadTracker:
         *,
         band: float,
         raw_demand: float,
+        opening: float | None = None,
     ) -> None:
         """Feed one cycle: the reading, the mode chosen, the heat target, and the controller's
-        band and unclamped demand (``MPCController.valve_feedback``)."""
+        band and unclamped demand (``MPCController.valve_feedback``), and the opening sent (0-1, defaults to
+        the clamped demand)."""
         samples = self._samples.setdefault(area_id, [])
         samples.append((now, current_temp))
         while samples and now - samples[0][0] > VALVE_TREND_WINDOW_MINUTES * 60:
             samples.pop(0)
         self._learn_lead(area_id, now, current_temp, mode)
+        self._note_opening(area_id, now, mode, min(1.0, max(0.0, raw_demand)) if opening is None else opening)
         last = self._at.get(area_id)
         self._at[area_id] = now
         if target is None or last is None or mode not in (MODE_HEATING, MODE_IDLE):
@@ -118,6 +133,23 @@ class ValveLeadTracker:
         if abs(trim - self._saved_trim.get(area_id, 0.0)) >= _TRIM_SAVE_STEP:
             self._saved_trim[area_id] = trim
             self.dirty = True
+
+    def _note_opening(self, area_id: str, now: float, mode: str, opening: float) -> None:
+        """Restart the dead-time clock whenever the valve opens further (or starts heating)."""
+        if mode != MODE_HEATING:
+            self._heat_since.pop(area_id, None)
+            self._heat_level.pop(area_id, None)
+            self._stepped.pop(area_id, None)
+            return
+        level = self._heat_level.get(area_id)
+        if level is None or opening >= level + VALVE_DEADBAND_PCT / 100:
+            since = self._heat_since.get(area_id)
+            lead = self._lead.get(area_id, VALVE_DEFAULT_LEAD_MINUTES)
+            self._stepped[area_id] = since is not None and (now - since) / 60 >= lead
+            self._heat_since[area_id] = now
+            self._heat_level[area_id] = opening
+        elif opening < level:
+            self._heat_level[area_id] = opening  # a later rise from here is a new opening
 
     def _learn_lead(self, area_id: str, now: float, current_temp: float, mode: str) -> None:
         previous = self._mode.get(area_id)
@@ -227,6 +259,9 @@ class ValveLeadTracker:
             self._samples,
             self._turn,
             self._mode,
+            self._heat_since,
+            self._heat_level,
+            self._stepped,
             self._at,
             self._saved_trim,
         )
